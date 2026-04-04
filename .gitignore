@@ -1,6 +1,36 @@
+# Dependencies
 node_modules/
+
+# Build outputs
+dist/
+.output/
+.vinxi/
+.turbo/
 .next/
+
+# Environment
 .env
 .env.local
+.env.*.local
+
+# TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Bun
+bun.lockb
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local database
+local.db
+local.db-journal
+
+# Turbo
+.turbo/

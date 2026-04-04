@@ -1,0 +1,10 @@
+{
+  "extends": "../../packages/config/tsconfig.solid.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "paths": {
+      "~/*": ["./src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}

@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+/* Back to the Future — Dark theme, professional, zero-compromise */
+:root {
+	--color-primary: #3b82f6;
+	--color-primary-hover: #2563eb;
+	--color-accent: #f59e0b;
+}

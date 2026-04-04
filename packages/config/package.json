@@ -1,0 +1,10 @@
+{
+  "name": "@btf/config",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    "./typescript": "./tsconfig.base.json",
+    "./typescript/solid": "./tsconfig.solid.json",
+    "./typescript/node": "./tsconfig.node.json"
+  }
+}

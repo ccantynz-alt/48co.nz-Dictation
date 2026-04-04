@@ -1,0 +1,26 @@
+{
+  "name": "@btf/api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --hot src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "start": "bun run dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src/"
+  },
+  "dependencies": {
+    "@btf/db": "workspace:*",
+    "@btf/schemas": "workspace:*",
+    "@btf/ai-core": "workspace:*",
+    "@trpc/server": "^11.0.0-rc.730",
+    "hono": "^4.7.5",
+    "zod": "^3.24.2",
+    "superjson": "^2.2.2"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.5",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,11 +1,10 @@
 {
+  "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "jsx": "preserve",
-    "jsxImportSource": "solid-js",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
@@ -16,14 +15,7 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "skipLibCheck": true,
-    "paths": {
-      "@btf/ui": ["./packages/ui/src/index.ts"],
-      "@btf/schemas": ["./packages/schemas/src/index.ts"],
-      "@btf/ai-core": ["./packages/ai-core/src/index.ts"],
-      "@btf/db": ["./packages/db/src/index.ts"],
-      "@btf/config": ["./packages/config/index.ts"]
-    }
+    "skipLibCheck": true
   },
   "exclude": ["node_modules", "dist", ".output", ".vinxi"]
 }
