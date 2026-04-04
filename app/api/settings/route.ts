@@ -1,12 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { query } from '@/lib/db';
+import { query, isDatabaseConfigured } from '@/lib/db';
 import { getOrCreateUser } from '@/lib/get-user';
+import { rateLimiters } from '@/lib/rate-limit';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const limited = rateLimiters.general(request);
+  if (limited) return limited;
+
   const authenticated = await getSession();
   if (!authenticated) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json({
+      custom_instructions: '',
+      settings: {},
+      notice: 'Database not configured. Settings are stored locally.',
+    });
   }
 
   try {
@@ -26,14 +38,25 @@ export async function GET() {
       settings: rows[0].settings || {},
     });
   } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to fetch settings', details: error.message }, { status: 500 });
+    console.error('Fetch settings error:', error);
+    return NextResponse.json({ error: 'Failed to fetch settings', code: 'FETCH_SETTINGS_ERROR' }, { status: 500 });
   }
 }
 
 export async function PUT(request: NextRequest) {
+  const rateLimited = rateLimiters.general(request);
+  if (rateLimited) return rateLimited;
+
   const authenticated = await getSession();
   if (!authenticated) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json(
+      { error: 'Database not configured. Data stored locally.' },
+      { status: 503 }
+    );
   }
 
   try {
@@ -71,6 +94,7 @@ export async function PUT(request: NextRequest) {
       settings: rows[0].settings || {},
     });
   } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to update settings', details: error.message }, { status: 500 });
+    console.error('Update settings error:', error);
+    return NextResponse.json({ error: 'Failed to update settings', code: 'UPDATE_SETTINGS_ERROR' }, { status: 500 });
   }
 }

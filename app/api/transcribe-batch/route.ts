@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { verifySession } from '@/lib/auth';
+import { rateLimiters } from '@/lib/rate-limit';
 
 export const maxDuration = 300; // 5 minutes for batch processing
 
@@ -12,6 +13,9 @@ interface TranscriptionResult {
 }
 
 export async function POST(request: NextRequest) {
+  const limited = rateLimiters.transcribeBatch(request);
+  if (limited) return limited;
+
   try {
     // Verify session
     const session = request.cookies.get('alecrae_session')?.value;
@@ -47,93 +51,107 @@ export async function POST(request: NextRequest) {
       async start(controller) {
         const results: TranscriptionResult[] = [];
 
-        // Send initial event with total count
-        controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({
-              type: 'start',
-              total: files.length,
-            })}\n\n`
-          )
-        );
-
-        // Process each file sequentially
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i];
-
-          // Send progress event
+        try {
+          // Send initial event with total count
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({
-                type: 'progress',
-                current: i + 1,
+                type: 'start',
                 total: files.length,
-                filename: file.name,
               })}\n\n`
             )
           );
 
-          try {
-            const transcription = await openai.audio.transcriptions.create({
-              file: file,
-              model: 'whisper-1',
-              language: 'en',
-              response_format: 'verbose_json',
-              prompt: vocabHint,
-            });
+          // Process each file sequentially
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
 
-            const result: TranscriptionResult = {
-              filename: file.name,
-              text: transcription.text,
-              duration: transcription.duration,
-            };
-
-            results.push(result);
-
-            // Send individual result
+            // Send progress event
             controller.enqueue(
               encoder.encode(
                 `data: ${JSON.stringify({
-                  type: 'result',
-                  ...result,
-                  index: i,
+                  type: 'progress',
+                  current: i + 1,
+                  total: files.length,
+                  filename: file.name,
                 })}\n\n`
               )
             );
-          } catch (err: any) {
-            const result: TranscriptionResult = {
-              filename: file.name,
-              text: '',
-              duration: undefined,
-              error: err.message || 'Transcription failed',
-            };
 
-            results.push(result);
+            try {
+              const transcription = await openai.audio.transcriptions.create({
+                file: file,
+                model: 'whisper-1',
+                language: 'en',
+                response_format: 'verbose_json',
+                prompt: vocabHint,
+              });
 
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({
-                  type: 'result',
-                  ...result,
-                  index: i,
-                })}\n\n`
-              )
-            );
+              const result: TranscriptionResult = {
+                filename: file.name,
+                text: transcription.text,
+                duration: transcription.duration,
+              };
+
+              results.push(result);
+
+              // Send individual result
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: 'result',
+                    ...result,
+                    index: i,
+                  })}\n\n`
+                )
+              );
+            } catch (err: unknown) {
+              console.error(`Batch transcription error for file ${file.name}:`, err);
+              const result: TranscriptionResult = {
+                filename: file.name,
+                text: '',
+                duration: undefined,
+                error: 'Transcription failed for this file',
+              };
+
+              results.push(result);
+
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: 'result',
+                    ...result,
+                    index: i,
+                  })}\n\n`
+                )
+              );
+            }
           }
+
+          // Send completion event with all results
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: 'complete',
+                results,
+              })}\n\n`
+            )
+          );
+
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+        } catch (streamErr: unknown) {
+          console.error('Batch transcription stream error:', streamErr);
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: 'error',
+                error: 'Batch processing failed',
+              })}\n\n`
+            )
+          );
+          controller.close();
         }
-
-        // Send completion event with all results
-        controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({
-              type: 'complete',
-              results,
-            })}\n\n`
-          )
-        );
-
-        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-        controller.close();
       },
     });
 
@@ -144,10 +162,10 @@ export async function POST(request: NextRequest) {
         Connection: 'keep-alive',
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Batch transcription error:', error);
     return NextResponse.json(
-      { error: error.message || 'Batch transcription failed' },
+      { error: 'Batch transcription failed', code: 'BATCH_TRANSCRIPTION_ERROR' },
       { status: 500 }
     );
   }

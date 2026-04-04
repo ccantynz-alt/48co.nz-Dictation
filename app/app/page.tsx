@@ -72,6 +72,17 @@ export default function DictationApp() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [recordMode, setRecordMode] = useState<'toggle' | 'hold'>('toggle');
 
+  // Live transcription state
+  const [transcriptionMode, setTranscriptionMode] = useState<'standard' | 'live'>('standard');
+  const [isLiveActive, setIsLiveActive] = useState(false);
+  const liveChunkIndexRef = useRef(0);
+  const liveAbortRef = useRef<AbortController | null>(null);
+  const liveIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const liveChunksRef = useRef<Blob[]>([]);
+  const liveTranscriptsRef = useRef<Map<number, string>>(new Map());
+  const liveMimeTypeRef = useRef<string>('');
+  const liveProcessingRef = useRef(false);
+
   // Batch transcription state
   const [showBatchPanel, setShowBatchPanel] = useState(false);
   const [batchFiles, setBatchFiles] = useState<BatchFileStatus[]>([]);
@@ -137,6 +148,128 @@ export default function DictationApp() {
     return () => window.removeEventListener('keydown', handler);
   }, [editingHotkey]);
 
+  // === Voice Command Processing ===
+  const processVoiceCommands = (text: string): string => {
+    let processed = text;
+    processed = processed.replace(/\b(new paragraph|next paragraph)\b/gi, '\n\n');
+    processed = processed.replace(/\b(new line|next line)\b/gi, '\n');
+    processed = processed.replace(/\bperiod\b/gi, '.');
+    processed = processed.replace(/\bcomma\b/gi, ',');
+    processed = processed.replace(/\bquestion mark\b/gi, '?');
+    processed = processed.replace(/\bexclamation mark\b/gi, '!');
+    processed = processed.replace(/\bcolon\b/gi, ':');
+    processed = processed.replace(/\bsemicolon\b/gi, ';');
+    processed = processed.replace(/\bopen quote\b/gi, '"');
+    processed = processed.replace(/\bclose quote\b/gi, '"');
+    processed = processed.replace(/\b(delete that|scratch that|strike that)\b/gi, '');
+    return processed.trim();
+  };
+
+  // === Live Streaming Transcription ===
+  const sendLiveChunk = useCallback(async () => {
+    if (liveProcessingRef.current || liveChunksRef.current.length === 0) return;
+
+    liveProcessingRef.current = true;
+    const chunkIndex = liveChunkIndexRef.current++;
+    const mimeType = liveMimeTypeRef.current;
+    const ext = mimeType.includes('webm') ? 'webm' : 'm4a';
+
+    const audioBlob = new Blob(liveChunksRef.current, { type: mimeType });
+    liveChunksRef.current = [];
+
+    if (audioBlob.size < 1000) {
+      liveProcessingRef.current = false;
+      return;
+    }
+
+    try {
+      const abortController = new AbortController();
+      liveAbortRef.current = abortController;
+
+      const formData = new FormData();
+      formData.append('audio', new File([audioBlob], `chunk_${chunkIndex}.${ext}`, { type: mimeType }));
+      if (vocabulary.length > 0) formData.append('vocabulary', vocabulary.join(', '));
+      formData.append('chunkIndex', chunkIndex.toString());
+
+      const res = await fetch('/api/transcribe-stream', {
+        method: 'POST',
+        body: formData,
+        signal: abortController.signal,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: 'Transcription failed' }));
+        throw new Error(errData.error);
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('No response stream');
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6);
+          if (payload === '[DONE]') break;
+
+          try {
+            const event = JSON.parse(payload);
+            if (event.type === 'error') {
+              console.error('Live transcription error:', event.error);
+              continue;
+            }
+            if (event.type === 'partial' && event.text) {
+              const processed = processVoiceCommands(event.text);
+              if (processed) {
+                liveTranscriptsRef.current.set(event.chunkIndex, processed);
+                const sortedKeys = Array.from(liveTranscriptsRef.current.keys()).sort((a, b) => a - b);
+                const fullText = sortedKeys.map(k => liveTranscriptsRef.current.get(k)).join(' ');
+                setRawText(fullText);
+              }
+            }
+          } catch {}
+        }
+      }
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.error('Live chunk transcription error:', err.message);
+      }
+    } finally {
+      liveProcessingRef.current = false;
+    }
+  }, [vocabulary]);
+
+  const startLiveTranscription = useCallback((stream: MediaStream, mimeType: string) => {
+    liveChunkIndexRef.current = 0;
+    liveTranscriptsRef.current.clear();
+    liveChunksRef.current = [];
+    liveMimeTypeRef.current = mimeType;
+    setIsLiveActive(true);
+
+    const liveRecorder = new MediaRecorder(stream, { mimeType });
+    liveRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) {
+        liveChunksRef.current.push(e.data);
+      }
+    };
+    liveRecorder.start(500);
+
+    liveIntervalRef.current = setInterval(() => {
+      sendLiveChunk();
+    }, 3000);
+
+    return liveRecorder;
+  }, [sendLiveChunk]);
+
   // === Recording ===
   const startRecording = useCallback(async () => {
     try {
@@ -158,6 +291,8 @@ export default function DictationApp() {
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         if (timerRef.current) clearInterval(timerRef.current);
+        // In live mode, skip the final full-blob transcription (text already streamed)
+        if (transcriptionMode === 'live') return;
         const blob = new Blob(chunksRef.current, { type: mimeType });
         if (blob.size < 500) { setError('Recording too short'); return; }
         await transcribeAudio(blob, mimeType);
@@ -168,16 +303,32 @@ export default function DictationApp() {
       setDuration(0);
       setEnhancedText('');
       timerRef.current = setInterval(() => setDuration(d => d + 1), 1000);
+
+      // Start live transcription if in live mode
+      if (transcriptionMode === 'live') {
+        startLiveTranscription(stream, mimeType);
+      }
     } catch (err: any) {
       setError(err.name === 'NotAllowedError' ? 'Microphone access denied — check browser settings' : err.message);
     }
-  }, []);
+  }, [transcriptionMode, startLiveTranscription]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === 'recording') {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
     }
+    // Clean up live transcription
+    if (liveIntervalRef.current) {
+      clearInterval(liveIntervalRef.current);
+      liveIntervalRef.current = null;
+    }
+    if (liveAbortRef.current) {
+      liveAbortRef.current.abort();
+      liveAbortRef.current = null;
+    }
+    setIsLiveActive(false);
+    liveProcessingRef.current = false;
   }, []);
 
   // === Transcription ===
@@ -195,20 +346,9 @@ export default function DictationApp() {
       if (!res.ok) throw new Error(data.error);
 
       // Process voice commands in raw text
-      let processed = data.text;
-      processed = processed.replace(/\b(new paragraph|next paragraph)\b/gi, '\n\n');
-      processed = processed.replace(/\b(new line|next line)\b/gi, '\n');
-      processed = processed.replace(/\bperiod\b/gi, '.');
-      processed = processed.replace(/\bcomma\b/gi, ',');
-      processed = processed.replace(/\bquestion mark\b/gi, '?');
-      processed = processed.replace(/\bexclamation mark\b/gi, '!');
-      processed = processed.replace(/\bcolon\b/gi, ':');
-      processed = processed.replace(/\bsemicolon\b/gi, ';');
-      processed = processed.replace(/\bopen quote\b/gi, '"');
-      processed = processed.replace(/\bclose quote\b/gi, '"');
-      processed = processed.replace(/\b(delete that|scratch that|strike that)\b/gi, '');
+      const processed = processVoiceCommands(data.text);
 
-      setRawText(prev => prev ? prev + '\n\n' + processed.trim() : processed.trim());
+      setRawText(prev => prev ? prev + '\n\n' + processed : processed);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -300,6 +440,108 @@ export default function DictationApp() {
       });
     }
   }, [isEnhancing, enhancedText]);
+
+  // === Batch Transcription ===
+  const handleBatchUpload = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+
+    const files = Array.from(fileList).slice(0, 20);
+    const statuses: BatchFileStatus[] = files.map(f => ({
+      filename: f.name,
+      status: 'pending',
+    }));
+    setBatchFiles(statuses);
+    setIsBatchProcessing(true);
+    setBatchProgress({ current: 0, total: files.length });
+    setError('');
+    setShowBatchPanel(true);
+
+    try {
+      const formData = new FormData();
+      files.forEach(f => formData.append('files', f));
+      if (vocabulary.length > 0) formData.append('vocabulary', vocabulary.join(', '));
+
+      const res = await fetch('/api/transcribe-batch', { method: 'POST', body: formData });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Batch transcription failed');
+      }
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (reader) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6);
+          if (payload === '[DONE]') break;
+
+          try {
+            const event = JSON.parse(payload);
+
+            if (event.type === 'progress') {
+              setBatchProgress({ current: event.current, total: event.total });
+              setBatchFiles(prev => prev.map((f, i) =>
+                i === event.current - 1 ? { ...f, status: 'transcribing' } : f
+              ));
+            } else if (event.type === 'result') {
+              setBatchFiles(prev => prev.map((f, i) =>
+                i === event.index
+                  ? {
+                      ...f,
+                      status: event.error ? 'error' : 'done',
+                      text: event.text || undefined,
+                      error: event.error || undefined,
+                      duration: event.duration || undefined,
+                    }
+                  : f
+              ));
+            }
+          } catch {}
+        }
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsBatchProcessing(false);
+      if (batchInputRef.current) batchInputRef.current.value = '';
+    }
+  };
+
+  const useBatchResult = (text: string) => {
+    setRawText(prev => prev ? prev + '\n\n' + text : text);
+  };
+
+  const useAllBatchResults = () => {
+    const allText = batchFiles
+      .filter(f => f.status === 'done' && f.text)
+      .map(f => f.text!)
+      .join('\n\n---\n\n');
+    if (allText) {
+      setRawText(prev => prev ? prev + '\n\n' + allText : allText);
+    }
+    setShowBatchPanel(false);
+  };
+
+  // === Auto-Detect Document Type ===
+  const handleAutoDetect = () => {
+    if (!rawText.trim()) return;
+    const result = detectDocumentType(rawText);
+    setMode(result.mode);
+    setAutoDetectResult({ mode: result.mode, confidence: result.confidence });
+
+    if (autoDetectTimerRef.current) clearTimeout(autoDetectTimerRef.current);
+    autoDetectTimerRef.current = setTimeout(() => setAutoDetectResult(null), 3000);
+  };
 
   // === Actions ===
   const copyToClipboard = async (text: string, which: string) => {
@@ -427,6 +669,110 @@ export default function DictationApp() {
         {/* Side Panel */}
         {activePanel !== 'none' && (
           <aside className="w-72 shrink-0 border-r border-ink-800/60 bg-ink-900/50 overflow-y-auto p-4 animate-fade-in">
+            {/* Templates Panel */}
+            {activePanel === 'templates' && (
+              <div>
+                {!selectedTemplate ? (
+                  <>
+                    <h2 className="text-sm font-medium text-ink-200 mb-1">Document templates</h2>
+                    <p className="text-xs text-ink-500 mb-4">Pre-formatted documents with fillable fields</p>
+
+                    {(['legal', 'accounting'] as const).map(cat => {
+                      const templates = BUILT_IN_TEMPLATES.filter(t => t.category === cat);
+                      if (templates.length === 0) return null;
+                      return (
+                        <div key={cat} className="mb-4">
+                          <p className="text-[10px] uppercase tracking-wider text-ink-500 font-medium mb-2">{cat}</p>
+                          <div className="space-y-1.5">
+                            {templates.map(t => (
+                              <button
+                                key={t.id}
+                                onClick={() => selectTemplate(t)}
+                                className="w-full text-left bg-ink-800/50 hover:bg-ink-800 rounded-lg px-3 py-2.5 transition-colors group"
+                              >
+                                <p className="text-sm text-ink-200 group-hover:text-ink-50">{t.name}</p>
+                                <p className="text-[11px] text-ink-500 mt-0.5 line-clamp-2">{t.description}</p>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setSelectedTemplate(null)}
+                      className="text-xs text-ink-500 hover:text-ink-200 mb-3 flex items-center gap-1"
+                    >
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                      Back to templates
+                    </button>
+                    <h2 className="text-sm font-medium text-ink-200 mb-1">{selectedTemplate.name}</h2>
+                    <p className="text-xs text-ink-500 mb-4">{selectedTemplate.description}</p>
+
+                    <div className="space-y-3 mb-4">
+                      {selectedTemplate.fields.map(field => (
+                        <div key={field.id}>
+                          <label className="text-xs text-ink-400 block mb-1">
+                            {field.label}
+                            {field.required && <span className="text-gold-500 ml-0.5">*</span>}
+                          </label>
+                          {field.type === 'text' && (
+                            <input
+                              type="text"
+                              value={templateFieldValues[field.id] || ''}
+                              onChange={e => updateTemplateField(field.id, e.target.value)}
+                              placeholder={field.placeholder}
+                              className="w-full bg-ink-800 border border-ink-700/50 rounded-lg px-3 py-1.5 text-sm text-ink-100 placeholder:text-ink-600 focus:border-gold-500/50 focus:outline-none"
+                            />
+                          )}
+                          {field.type === 'date' && (
+                            <input
+                              type="date"
+                              value={templateFieldValues[field.id] || ''}
+                              onChange={e => updateTemplateField(field.id, e.target.value)}
+                              className="w-full bg-ink-800 border border-ink-700/50 rounded-lg px-3 py-1.5 text-sm text-ink-100 focus:border-gold-500/50 focus:outline-none [color-scheme:dark]"
+                            />
+                          )}
+                          {field.type === 'textarea' && (
+                            <textarea
+                              value={templateFieldValues[field.id] || ''}
+                              onChange={e => updateTemplateField(field.id, e.target.value)}
+                              placeholder={field.placeholder}
+                              rows={3}
+                              className="w-full bg-ink-800 border border-ink-700/50 rounded-lg px-3 py-2 text-sm text-ink-100 placeholder:text-ink-600 resize-none focus:border-gold-500/50 focus:outline-none"
+                            />
+                          )}
+                          {field.type === 'select' && field.options && (
+                            <select
+                              value={templateFieldValues[field.id] || ''}
+                              onChange={e => updateTemplateField(field.id, e.target.value)}
+                              className="w-full bg-ink-800 border border-ink-700/50 rounded-lg px-3 py-1.5 text-sm text-ink-100 focus:border-gold-500/50 focus:outline-none"
+                            >
+                              {field.options.map(opt => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={generateFromTemplate}
+                      className="w-full py-2.5 rounded-lg text-sm font-medium bg-gold-500 text-ink-950 hover:bg-gold-400 transition-colors"
+                    >
+                      Generate document
+                    </button>
+                    <p className="text-[10px] text-ink-600 mt-2 text-center">
+                      Output appears in the Enhanced panel. Dictate content to replace [DICTATED CONTENT] sections.
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Vocabulary Panel */}
             {activePanel === 'vocabulary' && (
               <div>
@@ -610,8 +956,18 @@ export default function DictationApp() {
             <div className="flex-1 min-w-0">
               {isRecording ? (
                 <div>
-                  <p className="text-red-400 text-sm font-medium">Recording {formatTime(duration)}</p>
-                  <p className="text-ink-500 text-xs">Tap button or press {hotkeys.record} to stop</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-red-400 text-sm font-medium">Recording {formatTime(duration)}</p>
+                    {isLiveActive && (
+                      <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-medium">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 live-pulse" />
+                        LIVE
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-ink-500 text-xs">
+                    {isLiveActive ? 'Live transcription active — text appears as you speak' : `Tap button or press ${hotkeys.record} to stop`}
+                  </p>
                 </div>
               ) : isTranscribing ? (
                 <p className="text-gold-400 text-sm">Transcribing with Whisper...</p>
@@ -623,22 +979,64 @@ export default function DictationApp() {
               )}
             </div>
 
-            {/* Mode Selector */}
-            <select
-              value={mode}
-              onChange={e => setMode(e.target.value as DocMode)}
-              className="shrink-0 bg-ink-800 border border-ink-700/50 rounded-lg px-3 py-2 text-sm text-ink-200 focus:border-gold-500/50 max-w-[200px]"
-            >
-              <optgroup label="General">
-                {MODES.filter(m => m.cat === 'general').map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-              </optgroup>
-              <optgroup label="Legal">
-                {MODES.filter(m => m.cat === 'legal').map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-              </optgroup>
-              <optgroup label="Accounting">
-                {MODES.filter(m => m.cat === 'accounting').map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-              </optgroup>
-            </select>
+            {/* Transcription Mode Toggle */}
+            <div className="shrink-0 flex items-center bg-ink-800/70 rounded-lg p-0.5">
+              {(['standard', 'live'] as const).map(m => (
+                <button
+                  key={m}
+                  onClick={() => setTranscriptionMode(m)}
+                  disabled={isRecording || isTranscribing}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    transcriptionMode === m
+                      ? m === 'live'
+                        ? 'bg-emerald-500/20 text-emerald-300 shadow-sm'
+                        : 'bg-ink-700 text-ink-100 shadow-sm'
+                      : 'text-ink-400 hover:text-ink-200'
+                  } ${(isRecording || isTranscribing) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {m === 'live' ? 'Live' : 'Standard'}
+                </button>
+              ))}
+            </div>
+
+            {/* Mode Selector + Auto-detect */}
+            <div className="shrink-0 flex items-center gap-1.5 relative">
+              <select
+                value={mode}
+                onChange={e => setMode(e.target.value as DocMode)}
+                className="bg-ink-800 border border-ink-700/50 rounded-lg px-3 py-2 text-sm text-ink-200 focus:border-gold-500/50 max-w-[200px]"
+              >
+                <optgroup label="General">
+                  {MODES.filter(m => m.cat === 'general').map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </optgroup>
+                <optgroup label="Legal">
+                  {MODES.filter(m => m.cat === 'legal').map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </optgroup>
+                <optgroup label="Accounting">
+                  {MODES.filter(m => m.cat === 'accounting').map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </optgroup>
+              </select>
+              <button
+                onClick={handleAutoDetect}
+                disabled={!rawText.trim()}
+                title="Auto-detect document type from content"
+                className={`px-2.5 py-2 rounded-lg text-xs font-medium transition-all ${
+                  !rawText.trim()
+                    ? 'bg-ink-800/50 text-ink-600 cursor-not-allowed'
+                    : 'bg-ink-800 text-ink-300 hover:text-gold-400 hover:border-gold-500/30 border border-ink-700/50'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+              </button>
+              {autoDetectResult && (
+                <div className="absolute top-full right-0 mt-1.5 bg-ink-800 border border-gold-500/30 rounded-lg px-3 py-1.5 text-xs text-gold-400 whitespace-nowrap animate-fade-in z-10 shadow-lg">
+                  {MODES.find(m => m.value === autoDetectResult.mode)?.label || autoDetectResult.mode}
+                  <span className="ml-1.5 text-ink-400">{Math.round(autoDetectResult.confidence * 100)}% confidence</span>
+                </div>
+              )}
+            </div>
           </section>
 
           {/* Error */}
@@ -654,7 +1052,15 @@ export default function DictationApp() {
             {/* Raw Panel */}
             <div className="flex flex-col min-h-0 bg-ink-900/40 rounded-xl border border-ink-800/50 overflow-hidden">
               <div className="shrink-0 flex items-center justify-between px-4 py-2 border-b border-ink-800/40">
-                <span className="text-xs text-ink-400 font-medium">Raw dictation</span>
+                <span className="text-xs text-ink-400 font-medium flex items-center gap-2">
+                  Raw dictation
+                  {isLiveActive && (
+                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 live-pulse" />
+                      streaming
+                    </span>
+                  )}
+                </span>
                 <div className="flex items-center gap-2">
                   {rawText && (
                     <>
@@ -701,6 +1107,91 @@ export default function DictationApp() {
             </div>
           </div>
 
+          {/* Batch Transcription Panel */}
+          {showBatchPanel && (
+            <div className="shrink-0 bg-ink-900/60 border border-ink-800/50 rounded-xl p-4 animate-fade-in">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-medium text-ink-200">Batch transcription</h3>
+                  {isBatchProcessing && (
+                    <span className="text-xs text-gold-400">
+                      {batchProgress.current}/{batchProgress.total}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {!isBatchProcessing && batchFiles.some(f => f.status === 'done' && f.text) && (
+                    <button
+                      onClick={useAllBatchResults}
+                      className="text-xs text-gold-400 hover:text-gold-300 font-medium"
+                    >
+                      Use all results
+                    </button>
+                  )}
+                  <button
+                    onClick={() => { setShowBatchPanel(false); setBatchFiles([]); }}
+                    className="text-xs text-ink-500 hover:text-ink-300"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+
+              {isBatchProcessing && (
+                <div className="w-full bg-ink-800 rounded-full h-1.5 mb-3">
+                  <div
+                    className="bg-gold-500 h-1.5 rounded-full transition-all duration-300"
+                    style={{ width: `${batchProgress.total > 0 ? (batchProgress.current / batchProgress.total) * 100 : 0}%` }}
+                  />
+                </div>
+              )}
+
+              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                {batchFiles.map((file, i) => (
+                  <div key={i} className="flex items-center gap-2 bg-ink-800/40 rounded-lg px-3 py-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-ink-200 truncate">{file.filename}</p>
+                      {file.status === 'done' && file.text && (
+                        <p className="text-[11px] text-ink-500 truncate mt-0.5">{file.text.slice(0, 80)}...</p>
+                      )}
+                      {file.status === 'error' && (
+                        <p className="text-[11px] text-red-400 mt-0.5">{file.error || 'Failed'}</p>
+                      )}
+                    </div>
+                    <div className="shrink-0 flex items-center gap-1.5">
+                      {file.duration != null && (
+                        <span className="text-[10px] text-ink-600">{Math.round(file.duration)}s</span>
+                      )}
+                      {file.status === 'pending' && (
+                        <span className="text-[10px] text-ink-500 bg-ink-800 px-1.5 py-0.5 rounded">Queued</span>
+                      )}
+                      {file.status === 'transcribing' && (
+                        <svg className="w-3.5 h-3.5 animate-spin text-gold-400" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                      )}
+                      {file.status === 'done' && file.text && (
+                        <button
+                          onClick={() => useBatchResult(file.text!)}
+                          className="text-[10px] text-gold-400 hover:text-gold-300 font-medium px-1.5 py-0.5 bg-gold-500/10 rounded"
+                        >
+                          Use
+                        </button>
+                      )}
+                      {file.status === 'done' && !file.text && (
+                        <span className="text-[10px] text-ink-500">Empty</span>
+                      )}
+                      {file.status === 'error' && (
+                        <span className="text-[10px] text-red-400">Error</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Bottom Action Bar */}
           <section className="shrink-0 flex items-center gap-3 flex-wrap">
             <button
@@ -731,6 +1222,26 @@ export default function DictationApp() {
                 </button>
               </>
             )}
+
+            <input
+              ref={batchInputRef}
+              type="file"
+              multiple
+              accept="audio/*,.mp3,.wav,.m4a,.webm,.ogg,.flac,.mp4"
+              onChange={e => handleBatchUpload(e.target.files)}
+              className="hidden"
+            />
+            <button
+              onClick={() => batchInputRef.current?.click()}
+              disabled={isBatchProcessing}
+              className={`px-4 py-2.5 rounded-xl text-sm transition-colors ${
+                isBatchProcessing
+                  ? 'bg-ink-800 text-ink-500 cursor-wait'
+                  : 'bg-ink-800 text-ink-200 hover:bg-ink-700'
+              }`}
+            >
+              {isBatchProcessing ? 'Processing...' : 'Batch upload'}
+            </button>
 
             <div className="flex-1" />
             <span className="text-[11px] text-ink-600">

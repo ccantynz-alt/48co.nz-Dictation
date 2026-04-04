@@ -12,6 +12,12 @@ html { scroll-behavior: smooth; }
 }
 .recording-pulse { animation: recording-pulse 1.5s infinite; }
 
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.live-pulse { animation: live-pulse 1.5s ease-in-out infinite; }
+
 @keyframes stream-cursor {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }

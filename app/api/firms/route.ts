@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession } from '@/lib/auth';
 import {
-  FirmProfile,
+  type FirmProfile,
   FirmProfileInput,
   createFirmProfile,
   validateFirmProfile,
 } from '@/lib/firm-profiles';
-
-/**
- * In-memory store for firm profiles.
- * When the database (Neon PostgreSQL) is connected in Phase 2,
- * this will be replaced with proper database queries.
- */
-const firmStore = new Map<string, FirmProfile>();
+import { firmStore } from '@/lib/firm-store';
+import { rateLimiters } from '@/lib/rate-limit';
 
 async function checkAuth(request: NextRequest): Promise<NextResponse | null> {
   const session = request.cookies.get('alecrae_session')?.value;
@@ -26,6 +21,9 @@ async function checkAuth(request: NextRequest): Promise<NextResponse | null> {
  * GET /api/firms — List all firm profiles
  */
 export async function GET(request: NextRequest) {
+  const limited = rateLimiters.general(request);
+  if (limited) return limited;
+
   const authError = await checkAuth(request);
   if (authError) return authError;
 
@@ -40,6 +38,9 @@ export async function GET(request: NextRequest) {
  * POST /api/firms — Create a new firm profile
  */
 export async function POST(request: NextRequest) {
+  const postLimited = rateLimiters.general(request);
+  if (postLimited) return postLimited;
+
   const authError = await checkAuth(request);
   if (authError) return authError;
 
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ firm }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json(
-      { error: error.message || 'Failed to create firm profile' },
+      { error: 'Failed to create firm profile', code: 'CREATE_FIRM_ERROR' },
       { status: 500 }
     );
   }
@@ -68,6 +69,9 @@ export async function POST(request: NextRequest) {
  * Expects { id, ...updates } in the request body
  */
 export async function PUT(request: NextRequest) {
+  const putLimited = rateLimiters.general(request);
+  if (putLimited) return putLimited;
+
   const authError = await checkAuth(request);
   if (authError) return authError;
 
@@ -102,11 +106,9 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ firm: updated });
   } catch (error: any) {
     return NextResponse.json(
-      { error: error.message || 'Failed to update firm profile' },
+      { error: 'Failed to update firm profile', code: 'UPDATE_FIRM_ERROR' },
       { status: 500 }
     );
   }
 }
 
-// Export for use in the [id] route
-export { firmStore };

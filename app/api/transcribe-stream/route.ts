@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { verifySession } from '@/lib/auth';
+import { rateLimiters } from '@/lib/rate-limit';
 
 export const maxDuration = 120;
 
 export async function POST(request: NextRequest) {
+  const limited = rateLimiters.transcribeStream(request);
+  if (limited) return limited;
+
   try {
     // Verify session
     const session = request.cookies.get('alecrae_session')?.value;
@@ -66,12 +70,13 @@ export async function POST(request: NextRequest) {
           // Signal completion
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
-        } catch (err: any) {
+        } catch (err: unknown) {
+          console.error('Streaming transcription stream error:', err);
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({
                 type: 'error',
-                error: err.message || 'Transcription failed',
+                error: 'Transcription failed',
               })}\n\n`
             )
           );
@@ -87,10 +92,10 @@ export async function POST(request: NextRequest) {
         Connection: 'keep-alive',
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Streaming transcription error:', error);
     return NextResponse.json(
-      { error: error.message || 'Streaming transcription failed' },
+      { error: 'Streaming transcription failed', code: 'STREAM_TRANSCRIPTION_ERROR' },
       { status: 500 }
     );
   }

@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { rateLimiters } from '@/lib/rate-limit';
 
 export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
+  const limited = rateLimiters.transcribe(request);
+  if (limited) return limited;
+
   try {
     const formData = await request.formData();
     const audioFile = formData.get('audio') as File;
@@ -32,8 +36,11 @@ export async function POST(request: NextRequest) {
       text: transcription.text,
       duration: transcription.duration,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Transcription error:', error);
-    return NextResponse.json({ error: error.message || 'Transcription failed' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Transcription failed', code: 'TRANSCRIPTION_ERROR' },
+      { status: 500 }
+    );
   }
 }

@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, isDatabaseConfigured } from '@/lib/db';
 import { hashPassword, createUserSession, User } from '@/lib/auth-multi';
+import { rateLimiters } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
+  const limited = rateLimiters.auth(request);
+  if (limited) return limited;
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json(
+      { error: 'Database not configured. Registration is unavailable.' },
+      { status: 503 }
+    );
+  }
+
   try {
     const body = await request.json();
     const { email, password, name, firmName } = body as {
@@ -80,6 +91,6 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error: unknown) {
     console.error('Registration error:', error);
-    return NextResponse.json({ error: 'Registration failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Registration failed', code: 'REGISTRATION_ERROR' }, { status: 500 });
   }
 }

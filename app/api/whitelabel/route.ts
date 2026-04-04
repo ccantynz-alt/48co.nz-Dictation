@@ -1,14 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, requireRole } from '@/lib/auth-multi';
 import { getWhiteLabelConfig, updateWhiteLabelConfig } from '@/lib/whitelabel';
+import { isDatabaseConfigured } from '@/lib/db';
+import { rateLimiters } from '@/lib/rate-limit';
 
 /**
  * GET /api/whitelabel — Get white-label config for the current user's firm
  */
 export async function GET(request: NextRequest) {
+  const limited = rateLimiters.general(request);
+  if (limited) return limited;
+
   const currentUser = await getUserFromRequest(request);
   if (!currentUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json({
+      config: null,
+      notice: 'Database not configured. White-label configuration is unavailable.',
+    });
   }
 
   if (!currentUser.firmId) {
@@ -26,7 +38,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ config });
   } catch (error: unknown) {
     console.error('White-label GET error:', error);
-    return NextResponse.json({ error: 'Failed to fetch white-label config' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch white-label config', code: 'WHITELABEL_GET_ERROR' }, { status: 500 });
   }
 }
 
@@ -34,9 +46,19 @@ export async function GET(request: NextRequest) {
  * PUT /api/whitelabel — Update white-label config (admin/owner only)
  */
 export async function PUT(request: NextRequest) {
+  const rateLimited = rateLimiters.admin(request);
+  if (rateLimited) return rateLimited;
+
   const currentUser = await getUserFromRequest(request);
   if (!currentUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json(
+      { error: 'Database not configured. White-label configuration is unavailable.' },
+      { status: 503 }
+    );
   }
 
   if (!requireRole(currentUser, 'admin', 'owner')) {
@@ -85,6 +107,6 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ config });
   } catch (error: unknown) {
     console.error('White-label PUT error:', error);
-    return NextResponse.json({ error: 'Failed to update white-label config' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to update white-label config', code: 'WHITELABEL_PUT_ERROR' }, { status: 500 });
   }
 }

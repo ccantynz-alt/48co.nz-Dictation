@@ -1,12 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { query } from '@/lib/db';
+import { query, isDatabaseConfigured } from '@/lib/db';
 import { getOrCreateUser } from '@/lib/get-user';
+import { rateLimiters } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest) {
+  const limited = rateLimiters.general(request);
+  if (limited) return limited;
+
   const authenticated = await getSession();
   if (!authenticated) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json({
+      dictations: [],
+      total: 0,
+      limit: 50,
+      offset: 0,
+      notice: 'Database not configured. Dictation history is stored locally.',
+    });
   }
 
   try {
@@ -36,14 +50,25 @@ export async function GET(request: NextRequest) {
       offset,
     });
   } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to fetch dictations', details: error.message }, { status: 500 });
+    console.error('Fetch dictations error:', error);
+    return NextResponse.json({ error: 'Failed to fetch dictations', code: 'FETCH_DICTATIONS_ERROR' }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
+  const rateLimited = rateLimiters.general(request);
+  if (rateLimited) return rateLimited;
+
   const authenticated = await getSession();
   if (!authenticated) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json(
+      { error: 'Database not configured. Data stored locally.' },
+      { status: 503 }
+    );
   }
 
   try {
@@ -65,6 +90,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(rows[0], { status: 201 });
   } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to save dictation', details: error.message }, { status: 500 });
+    console.error('Save dictation error:', error);
+    return NextResponse.json({ error: 'Failed to save dictation', code: 'SAVE_DICTATION_ERROR' }, { status: 500 });
   }
 }

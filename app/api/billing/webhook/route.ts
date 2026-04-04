@@ -1,13 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, isDatabaseConfigured } from '@/lib/db';
 import { verifyWebhookEvent } from '@/lib/stripe';
 import Stripe from 'stripe';
+import { rateLimiters } from '@/lib/rate-limit';
 
 /**
  * POST /api/billing/webhook — Handle Stripe webhook events.
  * This route does NOT require JWT auth — it uses Stripe signature verification instead.
  */
 export async function POST(request: NextRequest) {
+  const limited = rateLimiters.billing(request);
+  if (limited) return limited;
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json(
+      { error: 'Database not configured. Webhook events cannot be processed.' },
+      { status: 503 }
+    );
+  }
+
   try {
     const body = await request.text();
     const signature = request.headers.get('stripe-signature');
@@ -91,6 +102,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true });
   } catch (error: unknown) {
     console.error('Webhook error:', error);
-    return NextResponse.json({ error: 'Webhook processing failed' }, { status: 400 });
+    return NextResponse.json({ error: 'Webhook processing failed', code: 'WEBHOOK_ERROR' }, { status: 400 });
   }
 }

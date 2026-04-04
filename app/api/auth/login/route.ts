@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, isDatabaseConfigured } from '@/lib/db';
 import { verifyPassword, createUserSession, User } from '@/lib/auth-multi';
+import { rateLimiters } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
+  const limited = rateLimiters.auth(request);
+  if (limited) return limited;
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json(
+      { error: 'Database not configured. Multi-user login is unavailable. Use the admin password to sign in.' },
+      { status: 503 }
+    );
+  }
+
   try {
     const body = await request.json();
     const { email, password } = body as { email?: string; password?: string };
@@ -63,6 +74,6 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error: unknown) {
     console.error('Login error:', error);
-    return NextResponse.json({ error: 'Login failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Login failed', code: 'LOGIN_ERROR' }, { status: 500 });
   }
 }

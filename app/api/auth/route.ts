@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSession, validatePassword } from '@/lib/auth';
+import { rateLimiters } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
+  const limited = rateLimiters.auth(request);
+  if (limited) return limited;
+
   try {
     const { password } = await request.json();
 
@@ -21,13 +25,25 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (error: any) {
-    return NextResponse.json({ error: 'Authentication failed' }, { status: 500 });
+  } catch (error: unknown) {
+    console.error('Auth error:', error);
+    return NextResponse.json(
+      { error: 'Authentication failed', code: 'AUTH_ERROR' },
+      { status: 500 }
+    );
   }
 }
 
 export async function DELETE() {
-  const response = NextResponse.json({ success: true });
-  response.cookies.delete('alecrae_session');
-  return response;
+  try {
+    const response = NextResponse.json({ success: true });
+    response.cookies.delete('alecrae_session');
+    return response;
+  } catch (error: unknown) {
+    console.error('Logout error:', error);
+    return NextResponse.json(
+      { error: 'Logout failed', code: 'LOGOUT_ERROR' },
+      { status: 500 }
+    );
+  }
 }

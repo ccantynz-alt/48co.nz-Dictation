@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, isDatabaseConfigured } from '@/lib/db';
 import { getUserFromRequest, requireRole } from '@/lib/auth-multi';
+import { rateLimiters } from '@/lib/rate-limit';
 
 /**
  * GET /api/users/[id] — Get a user profile
@@ -9,9 +10,19 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const limited = rateLimiters.general(request);
+  if (limited) return limited;
+
   const currentUser = await getUserFromRequest(request);
   if (!currentUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json(
+      { error: 'Database not configured. User profiles are unavailable.' },
+      { status: 404 }
+    );
   }
 
   const { id } = params;
@@ -21,18 +32,23 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const rows = await query(
-    `SELECT id, email, name, role, firm_id, firm_name, subscription_tier,
-            stripe_customer_id, settings, custom_instructions, created_at, updated_at
-     FROM users WHERE id = $1`,
-    [id]
-  );
+  try {
+    const rows = await query(
+      `SELECT id, email, name, role, firm_id, firm_name, subscription_tier,
+              stripe_customer_id, settings, custom_instructions, created_at, updated_at
+       FROM users WHERE id = $1`,
+      [id]
+    );
 
-  if (rows.length === 0) {
-    return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    if (rows.length === 0) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ user: rows[0] });
+  } catch (error: unknown) {
+    console.error('Get user error:', error);
+    return NextResponse.json({ error: 'Failed to fetch user', code: 'GET_USER_ERROR' }, { status: 500 });
   }
-
-  return NextResponse.json({ user: rows[0] });
 }
 
 /**
@@ -42,9 +58,19 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const putLimited = rateLimiters.general(request);
+  if (putLimited) return putLimited;
+
   const currentUser = await getUserFromRequest(request);
   if (!currentUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json(
+      { error: 'Database not configured. Data stored locally.' },
+      { status: 503 }
+    );
   }
 
   const { id } = params;
@@ -114,7 +140,7 @@ export async function PUT(
     return NextResponse.json({ user: result[0] });
   } catch (error: unknown) {
     console.error('Update user error:', error);
-    return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to update user', code: 'UPDATE_USER_ERROR' }, { status: 500 });
   }
 }
 
@@ -125,6 +151,9 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const deleteLimited = rateLimiters.admin(request);
+  if (deleteLimited) return deleteLimited;
+
   const currentUser = await getUserFromRequest(request);
   if (!currentUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -134,6 +163,13 @@ export async function DELETE(
     return NextResponse.json({ error: 'Forbidden: admin or owner role required' }, { status: 403 });
   }
 
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json(
+      { error: 'Database not configured. User management is unavailable.' },
+      { status: 503 }
+    );
+  }
+
   const { id } = params;
 
   // Prevent self-deletion
@@ -141,19 +177,24 @@ export async function DELETE(
     return NextResponse.json({ error: 'Cannot deactivate your own account' }, { status: 400 });
   }
 
-  // Soft-delete by setting subscription_status to 'deactivated'
-  const result = await query(
-    `UPDATE users SET subscription_status = 'deactivated', updated_at = NOW()
-     WHERE id = $1 RETURNING id, email, name`,
-    [id]
-  );
+  try {
+    // Soft-delete by setting subscription_status to 'deactivated'
+    const result = await query(
+      `UPDATE users SET subscription_status = 'deactivated', updated_at = NOW()
+       WHERE id = $1 RETURNING id, email, name`,
+      [id]
+    );
 
-  if (result.length === 0) {
-    return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    if (result.length === 0) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `User ${result[0].email} has been deactivated`,
+    });
+  } catch (error: unknown) {
+    console.error('Deactivate user error:', error);
+    return NextResponse.json({ error: 'Failed to deactivate user', code: 'DEACTIVATE_USER_ERROR' }, { status: 500 });
   }
-
-  return NextResponse.json({
-    success: true,
-    message: `User ${result[0].email} has been deactivated`,
-  });
 }
