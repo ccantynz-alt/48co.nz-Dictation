@@ -307,12 +307,188 @@ export default function AdminDashboard() {
         )}
 
         {/* Firms Tab */}
-        {tab === 'firms' && (
-          <div className="max-w-3xl">
-            <p className="text-ink-400 text-sm">Firm management — configure firm profiles, vocabulary, and white-label branding from Settings.</p>
-          </div>
-        )}
+        {tab === 'firms' && <FirmsManager />}
       </div>
+    </div>
+  );
+}
+
+// === Firms Manager Component ===
+interface FirmData {
+  id: string;
+  name: string;
+  slug: string;
+  dateFormat: string;
+  spellingPreference: string;
+  defaultInstructions: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const EMPTY_FORM = { name: '', slug: '', dateFormat: 'DD/MM/YYYY', spellingPreference: 'US', defaultInstructions: '' };
+
+function FirmsManager() {
+  const [firms, setFirms] = useState<FirmData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [msg, setMsg] = useState('');
+  const [msgType, setMsgType] = useState<'success' | 'error'>('success');
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+
+  const flash = (text: string, type: 'success' | 'error') => {
+    setMsg(text);
+    setMsgType(type);
+    setTimeout(() => setMsg(''), 3000);
+  };
+
+  const fetchFirms = async () => {
+    try {
+      const res = await fetch('/api/firms');
+      const data = await res.json();
+      setFirms(data.firms || []);
+    } catch {
+      flash('Failed to load firms', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchFirms(); }, []);
+
+  const saveFirm = async () => {
+    if (!form.name.trim()) { flash('Firm name is required', 'error'); return; }
+    try {
+      const isEdit = !!editingId;
+      const res = await fetch('/api/firms', {
+        method: isEdit ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(isEdit ? { id: editingId, ...form } : form),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || data.errors?.join(', ') || 'Failed');
+      }
+      flash(isEdit ? 'Firm updated' : 'Firm created', 'success');
+      setShowForm(false);
+      setEditingId(null);
+      setForm(EMPTY_FORM);
+      fetchFirms();
+    } catch (err: any) {
+      flash(err.message, 'error');
+    }
+  };
+
+  const deleteFirm = async (id: string, name: string) => {
+    try {
+      const res = await fetch(`/api/firms/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Delete failed');
+      flash(`Deleted ${name}`, 'success');
+      fetchFirms();
+    } catch (err: any) {
+      flash(err.message, 'error');
+    }
+  };
+
+  const openEdit = (firm: FirmData) => {
+    setEditingId(firm.id);
+    setForm({
+      name: firm.name,
+      slug: firm.slug,
+      dateFormat: firm.dateFormat || 'DD/MM/YYYY',
+      spellingPreference: firm.spellingPreference || 'US',
+      defaultInstructions: firm.defaultInstructions || '',
+    });
+    setShowForm(true);
+  };
+
+  return (
+    <div className="max-w-3xl">
+      {msg && (
+        <div className={`mb-4 px-4 py-2 rounded-lg text-sm ${msgType === 'success' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-red-500/10 text-red-300'}`}>
+          {msg}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-medium text-ink-200">Firm Profiles</h3>
+        <button
+          onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(EMPTY_FORM); }}
+          className="px-3 py-1.5 bg-gold-500 text-ink-950 rounded-lg text-xs font-medium hover:bg-gold-400"
+        >
+          {showForm ? 'Cancel' : '+ Create Firm'}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="bg-ink-800/50 rounded-xl p-4 mb-4 space-y-3">
+          <div>
+            <label className="text-xs text-ink-400 block mb-1">Firm name *</label>
+            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              className="w-full bg-ink-800 border border-ink-700/50 rounded-lg px-3 py-1.5 text-sm text-ink-100 focus:border-gold-500/50 focus:outline-none" />
+          </div>
+          <div>
+            <label className="text-xs text-ink-400 block mb-1">Slug</label>
+            <input value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} disabled={!!editingId}
+              placeholder="auto-generated if empty"
+              className="w-full bg-ink-800 border border-ink-700/50 rounded-lg px-3 py-1.5 text-sm text-ink-100 placeholder:text-ink-600 focus:border-gold-500/50 focus:outline-none disabled:opacity-50" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-ink-400 block mb-1">Date format</label>
+              <select value={form.dateFormat} onChange={e => setForm(f => ({ ...f, dateFormat: e.target.value }))}
+                className="w-full bg-ink-800 border border-ink-700/50 rounded-lg px-3 py-1.5 text-sm text-ink-100 focus:border-gold-500/50 focus:outline-none">
+                {['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD', 'D MMMM YYYY', 'MMMM D, YYYY', 'DD.MM.YYYY', 'D/M/YYYY'].map(f => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-ink-400 block mb-1">Spelling</label>
+              <select value={form.spellingPreference} onChange={e => setForm(f => ({ ...f, spellingPreference: e.target.value }))}
+                className="w-full bg-ink-800 border border-ink-700/50 rounded-lg px-3 py-1.5 text-sm text-ink-100 focus:border-gold-500/50 focus:outline-none">
+                {['US', 'UK', 'AU'].map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-ink-400 block mb-1">Default AI instructions</label>
+            <textarea value={form.defaultInstructions} onChange={e => setForm(f => ({ ...f, defaultInstructions: e.target.value }))}
+              rows={3} placeholder="e.g. Always use UK spelling. Our firm name is..."
+              className="w-full bg-ink-800 border border-ink-700/50 rounded-lg px-3 py-2 text-sm text-ink-100 placeholder:text-ink-600 resize-none focus:border-gold-500/50 focus:outline-none" />
+          </div>
+          <button onClick={saveFirm} className="w-full py-2 rounded-lg text-sm font-medium bg-gold-500 text-ink-950 hover:bg-gold-400">
+            {editingId ? 'Update Firm' : 'Create Firm'}
+          </button>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2].map(i => <div key={i} className="h-14 bg-ink-800/50 rounded-lg animate-pulse" />)}
+        </div>
+      ) : firms.length === 0 ? (
+        <p className="text-xs text-ink-600 italic">No firms configured yet</p>
+      ) : (
+        <div className="space-y-2">
+          {firms.map(firm => (
+            <div key={firm.id} className="bg-ink-800/50 rounded-lg px-4 py-3 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-ink-200 font-medium">{firm.name}</p>
+                <p className="text-[11px] text-ink-500 mt-0.5">
+                  {firm.slug && <span className="mr-2">{firm.slug}</span>}
+                  <span className="bg-ink-700/50 px-1.5 py-0.5 rounded text-[10px]">{firm.spellingPreference || 'US'}</span>
+                  <span className="ml-1.5">{firm.dateFormat || 'DD/MM/YYYY'}</span>
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => openEdit(firm)} className="text-xs text-ink-400 hover:text-gold-400">Edit</button>
+                <button onClick={() => deleteFirm(firm.id, firm.name)} className="text-xs text-ink-400 hover:text-red-400">Delete</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -63,6 +63,7 @@ export default function DictationApp() {
 
   // Panels
   const [activePanel, setActivePanel] = useState<Panel>('none');
+  const [historySearch, setHistorySearch] = useState('');
 
   // Settings stored in localStorage
   const [vocabulary, setVocabulary] = useState<string[]>([]);
@@ -843,18 +844,44 @@ export default function DictationApp() {
                     Clear
                   </button>
                 </div>
+                <input
+                  value={historySearch}
+                  onChange={e => setHistorySearch(e.target.value)}
+                  placeholder="Search dictations..."
+                  className="w-full bg-ink-800 border border-ink-700/50 rounded-lg px-3 py-1.5 text-sm text-ink-100 placeholder:text-ink-500 focus:border-gold-500/50 mb-3"
+                />
                 <div className="space-y-2 max-h-[70vh] overflow-y-auto">
-                  {history.map(item => (
-                    <button
-                      key={item.id}
-                      onClick={() => loadFromHistory(item)}
-                      className="w-full text-left bg-ink-800/50 hover:bg-ink-800 rounded-lg px-3 py-2 transition-colors"
-                    >
-                      <p className="text-xs text-ink-400 mb-1">{formatDate(item.date)} · {item.mode}</p>
-                      <p className="text-sm text-ink-200 line-clamp-2">{item.raw.slice(0, 120)}...</p>
-                    </button>
-                  ))}
-                  {history.length === 0 && <p className="text-xs text-ink-600 italic">No history yet</p>}
+                  {(() => {
+                    const q = historySearch.toLowerCase().trim();
+                    const filtered = q
+                      ? history.filter(item =>
+                          item.raw.toLowerCase().includes(q) ||
+                          item.enhanced.toLowerCase().includes(q) ||
+                          item.mode.toLowerCase().includes(q) ||
+                          formatDate(item.date).toLowerCase().includes(q)
+                        )
+                      : history;
+                    if (filtered.length === 0 && q) {
+                      return <p className="text-xs text-ink-600 italic">No dictations match your search</p>;
+                    }
+                    if (filtered.length === 0) {
+                      return <p className="text-xs text-ink-600 italic">No history yet</p>;
+                    }
+                    return filtered.map(item => {
+                      const modeLabel = MODES.find(m => m.value === item.mode)?.label || item.mode;
+                      const preview = item.raw.slice(0, 120);
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => loadFromHistory(item)}
+                          className="w-full text-left bg-ink-800/50 hover:bg-ink-800 rounded-lg px-3 py-2 transition-colors"
+                        >
+                          <p className="text-xs text-ink-400 mb-1">{formatDate(item.date)} · {modeLabel}</p>
+                          <p className="text-sm text-ink-200 line-clamp-2">{preview}...</p>
+                        </button>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
             )}
