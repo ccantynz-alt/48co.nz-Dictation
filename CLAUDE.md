@@ -54,15 +54,24 @@
 - [x] Rate limiting — sliding window per-IP across all 27 API routes (auth: 10/min, transcribe: 30/min, enhance: 20/min, batch: 5/min)
 - [x] Error hardening — consistent error format, no stack trace leaks, proper error codes, `error: unknown` typing
 
-### Wave 2 Features (IN PROGRESS)
-- [ ] Pre-loaded legal/accounting vocabulary (5,000+ built-in terms — statutes, Latin phrases, GAAP/IFRS, court names)
-- [ ] Privacy/data handling page (/privacy route — how audio/text is processed, retention, encryption)
-- [ ] Pre-loaded legal vocabulary dictionary (auto-loaded, user can't accidentally delete)
-- [ ] Search across dictation history
-- [ ] Firm profile management UI (create/edit firms, assign vocabulary, instructions)
-- [ ] White-label branding applied to UI (firm colors, logo support)
+### Wave 2 Features (COMPLETE — April 2026)
+- [x] Privacy/data handling page (/privacy — public, no auth, attorney-grade language)
+- [x] Service worker for offline PWA support (cache-first static, network-first API, offline banner)
+- [x] Search across dictation history (real-time filtering across raw text, enhanced text, mode, date)
+- [x] Firm profile management UI (create/edit/delete firms in admin dashboard)
+- [x] White-label branding system (BrandingContext provider, CSS custom properties, admin Branding tab)
+- [ ] Pre-loaded legal/accounting vocabulary (5,000+ built-in terms — IN PROGRESS)
 - [ ] Audio playback of original recordings
-- [ ] Service worker for offline PWA support
+
+### Wave 3 Features (COMPLETE — April 2026)
+- [x] Complete auth system — registration with password strength, forgot/reset password, premium login page
+- [x] In-memory user store fallback (works without DATABASE_URL)
+- [x] Password reset tokens (1-hour expiry, single-use, PBKDF2 hashing)
+- [x] Premium UI polish — glass header, gold idle pulse, dramatic recording animation, audio waveform bars
+- [x] Enhanced panel glow when Claude is streaming
+- [x] Button shimmer effect, premium mode selector dropdown
+- [x] Admin dashboard polish — SVG icons on stat cards, pill-style tab navigation, backdrop blur header
+- [x] Billing page polish — hover lift on cards, gold glow on current plan, credit card icon
 
 ### Phase 2 — Database (Neon PostgreSQL) — NOT STARTED
 - [ ] Set DATABASE_URL env var on Vercel
