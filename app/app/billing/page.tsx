@@ -132,12 +132,18 @@ export default function BillingPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <header className="shrink-0 border-b border-ink-800/60 px-4 py-3 flex items-center justify-between">
+      <header className="shrink-0 border-b border-ink-800/60 bg-ink-950/80 backdrop-blur-sm px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link href="/app" className="text-ink-400 hover:text-ink-200 text-sm">&larr; Back</Link>
-          <h1 className="font-display text-lg text-ink-50">
-            Plans & <span className="text-gold-400">Billing</span>
-          </h1>
+          <Link href="/app" className="text-ink-400 hover:text-ink-200 text-sm transition-colors">&larr; Back to app</Link>
+          <div className="w-px h-5 bg-ink-800" />
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5 text-gold-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+            </svg>
+            <h1 className="font-display text-lg text-ink-50">
+              Plans & <span className="text-gold-400">Billing</span>
+            </h1>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           {isPastDue && (
@@ -216,12 +222,12 @@ export default function BillingPage() {
                   return (
                     <div
                       key={plan.id}
-                      className={`rounded-xl border p-5 flex flex-col transition-all ${
+                      className={`rounded-xl border p-6 flex flex-col transition-all duration-200 ${
                         isCurrent
-                          ? 'border-gold-500/50 bg-ink-900/80 ring-1 ring-gold-500/20'
+                          ? 'border-gold-500/50 bg-ink-900/80 ring-1 ring-gold-500/20 shadow-[0_0_30px_-5px_rgba(196,162,58,0.15)]'
                           : plan.highlight && !isDowngrade
-                          ? 'border-gold-500/30 bg-ink-900/60 hover:border-gold-500/50'
-                          : 'border-ink-800/50 bg-ink-900/40'
+                          ? 'border-gold-500/30 bg-ink-900/60 hover:border-gold-500/50 hover:-translate-y-1 hover:shadow-lg hover:shadow-ink-950/50'
+                          : 'border-ink-800/50 bg-ink-900/40 hover:-translate-y-1 hover:shadow-lg hover:shadow-ink-950/50 hover:border-ink-700/50'
                       }`}
                     >
                       {isCurrent ? (
