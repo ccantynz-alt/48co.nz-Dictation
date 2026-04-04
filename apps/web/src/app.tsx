@@ -17,6 +17,12 @@ export default function App() {
 							<a href="/dashboard" class="text-sm text-zinc-400 transition-colors hover:text-zinc-200">
 								Dashboard
 							</a>
+							<a href="/ai" class="text-sm text-zinc-400 transition-colors hover:text-zinc-200">
+								AI
+							</a>
+							<a href="/collab" class="text-sm text-zinc-400 transition-colors hover:text-zinc-200">
+								Collaborate
+							</a>
 						</div>
 					</nav>
 					<div class="pt-14">

@@ -1,0 +1,35 @@
+# Cloudflare Workers configuration for BTF API edge deployment
+name = "btf-api"
+main = "../../apps/api/src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "production"
+
+# D1 Database (edge SQL)
+[[d1_databases]]
+binding = "DB"
+database_name = "btf-db"
+database_id = "placeholder-replace-with-actual-id"
+
+# R2 Object Storage (zero egress fees)
+[[r2_buckets]]
+binding = "ASSETS"
+bucket_name = "btf-assets"
+
+# KV Namespace (global key-value)
+[[kv_namespaces]]
+binding = "CACHE"
+id = "placeholder-replace-with-actual-id"
+
+# Durable Objects (stateful edge compute)
+# [[durable_objects.bindings]]
+# name = "COLLAB_ROOM"
+# class_name = "CollaborationRoom"
+
+[build]
+command = "bun run build"
+
+[site]
+bucket = "../../apps/web/dist"

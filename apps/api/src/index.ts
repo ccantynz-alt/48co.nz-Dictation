@@ -7,6 +7,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { authMiddleware } from "./auth/middleware.js";
+import { securityHeaders, requestId, rateLimit } from "./routes/security.js";
 import { trpcServer } from "./trpc/server.js";
 import { healthRouter } from "./routes/health.js";
 import { streamRouter } from "./routes/stream.js";
@@ -14,7 +15,10 @@ import { wsRouter } from "./realtime/websocket.js";
 
 const app = new Hono();
 
+// Core middleware
+app.use("*", requestId);
 app.use("*", logger());
+app.use("*", securityHeaders);
 app.use(
 	"*",
 	cors({
@@ -22,12 +26,20 @@ app.use(
 		credentials: true,
 	}),
 );
+
+// Rate limiting on public endpoints
+app.use("/trpc/*", rateLimit({ windowMs: 60_000, maxRequests: 100 }));
+app.use("/stream/*", rateLimit({ windowMs: 60_000, maxRequests: 20 }));
+
+// Auth
 app.use("*", authMiddleware);
 
+// Routes
 app.route("/", healthRouter);
 app.route("/", streamRouter);
 app.route("/", wsRouter);
 
+// tRPC
 app.use("/trpc/*", trpcServer);
 
 const port = Number(process.env.PORT ?? 3001);
