@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import ServiceWorkerRegister from './sw-register'
 
 export const metadata: Metadata = {
   title: 'AlecRae Voice — Professional Dictation',
@@ -20,7 +21,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="h-full">
-      <body className="h-full bg-ink-950 text-ink-100 font-body antialiased">{children}</body>
+      <body className="h-full bg-ink-950 text-ink-100 font-body antialiased">
+        <ServiceWorkerRegister />
+        {children}
+      </body>
     </html>
   )
 }
