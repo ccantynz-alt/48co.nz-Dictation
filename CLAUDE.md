@@ -61,7 +61,7 @@
 - [x] Firm profile management UI (create/edit/delete firms in admin dashboard)
 - [x] White-label branding system (BrandingContext provider, CSS custom properties, admin Branding tab)
 - [x] Pre-loaded legal/accounting vocabulary (5,000+ built-in terms across 15 categories, mode-specific selection)
-- [ ] Audio playback of original recordings
+- [x] Audio playback of original recordings (base64 storage, play/pause, progress bar, 5MB cap)
 
 ### Wave 3 Features (COMPLETE — April 2026)
 - [x] Complete auth system — registration with password strength, forgot/reset password, premium login page
@@ -93,9 +93,9 @@
 - [x] Batch file transcription
 - [x] Auto-detect document type from content
 - [ ] Multi-language legal terminology
-- [ ] Audio playback of recordings
+- [x] Audio playback of recordings
 - [ ] Firm-specific AI training profiles
-- [ ] Chrome extension for system-wide dictation
+- [x] Chrome extension for system-wide dictation (Manifest V3, popup + content script + background SW)
 - [ ] Integration with AlecRae legal research (Oracle)
 - [ ] Integration with AlecRae accounting platform
 - [ ] Integration with AlecRae messenger
