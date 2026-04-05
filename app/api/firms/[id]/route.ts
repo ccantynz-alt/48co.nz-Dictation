@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession } from '@/lib/auth';
-import { firmStore } from '../route';
+import { firmStore } from '@/lib/firm-store';
+import { rateLimiters } from '@/lib/rate-limit';
 
 async function checkAuth(request: NextRequest): Promise<NextResponse | null> {
   const session = request.cookies.get('alecrae_session')?.value;
@@ -17,6 +18,9 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const limited = rateLimiters.general(request);
+  if (limited) return limited;
+
   const authError = await checkAuth(request);
   if (authError) return authError;
 
@@ -35,6 +39,9 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const rateLimited = rateLimiters.general(request);
+  if (rateLimited) return rateLimited;
+
   const authError = await checkAuth(request);
   if (authError) return authError;
 

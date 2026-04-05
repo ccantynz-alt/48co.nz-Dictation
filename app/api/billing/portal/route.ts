@@ -1,12 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, isDatabaseConfigured } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth-multi';
 import { createPortalSession } from '@/lib/stripe';
+import { rateLimiters } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
+  const limited = rateLimiters.billing(request);
+  if (limited) return limited;
+
   const currentUser = await getUserFromRequest(request);
   if (!currentUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json(
+      { error: 'Database not configured. Billing portal is unavailable.' },
+      { status: 503 }
+    );
   }
 
   try {
@@ -34,6 +45,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ url: portalUrl });
   } catch (error: unknown) {
     console.error('Portal error:', error);
-    return NextResponse.json({ error: 'Failed to create portal session' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to create portal session', code: 'PORTAL_ERROR' }, { status: 500 });
   }
 }

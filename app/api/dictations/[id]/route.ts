@@ -1,15 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { query } from '@/lib/db';
+import { query, isDatabaseConfigured } from '@/lib/db';
 import { getOrCreateUser } from '@/lib/get-user';
+import { rateLimiters } from '@/lib/rate-limit';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const limited = rateLimiters.general(request);
+  if (limited) return limited;
+
   const authenticated = await getSession();
   if (!authenticated) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json(
+      { error: 'Database not configured. Dictation history is stored locally.' },
+      { status: 404 }
+    );
   }
 
   try {
@@ -28,7 +39,8 @@ export async function GET(
 
     return NextResponse.json(rows[0]);
   } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to fetch dictation', details: error.message }, { status: 500 });
+    console.error('Fetch dictation error:', error);
+    return NextResponse.json({ error: 'Failed to fetch dictation', code: 'FETCH_DICTATION_ERROR' }, { status: 500 });
   }
 }
 
@@ -36,9 +48,19 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const rateLimited = rateLimiters.general(request);
+  if (rateLimited) return rateLimited;
+
   const authenticated = await getSession();
   if (!authenticated) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json(
+      { error: 'Database not configured. Data stored locally.' },
+      { status: 503 }
+    );
   }
 
   try {
@@ -55,6 +77,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to delete dictation', details: error.message }, { status: 500 });
+    console.error('Delete dictation error:', error);
+    return NextResponse.json({ error: 'Failed to delete dictation', code: 'DELETE_DICTATION_ERROR' }, { status: 500 });
   }
 }

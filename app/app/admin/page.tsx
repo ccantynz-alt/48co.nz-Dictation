@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useBranding } from '@/lib/BrandingContext';
 
 interface Stats {
   totalUsers: number;
@@ -30,7 +31,7 @@ export default function AdminDashboard() {
   const [planFilter, setPlanFilter] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'overview' | 'users' | 'firms'>('overview');
+  const [tab, setTab] = useState<'overview' | 'users' | 'firms' | 'branding'>('overview');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState('');
   const [inviteRole, setInviteRole] = useState('user');
@@ -98,19 +99,25 @@ export default function AdminDashboard() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <header className="shrink-0 border-b border-ink-800/60 px-4 py-3 flex items-center justify-between">
+      <header className="shrink-0 border-b border-ink-800/60 bg-ink-950/80 backdrop-blur-sm px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link href="/app" className="text-ink-400 hover:text-ink-200 text-sm">&larr; Back</Link>
-          <h1 className="font-display text-lg text-ink-50">
-            Admin <span className="text-gold-400">Dashboard</span>
-          </h1>
+          <Link href="/app" className="text-ink-400 hover:text-ink-200 text-sm transition-colors">&larr; Back to app</Link>
+          <div className="w-px h-5 bg-ink-800" />
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5 text-gold-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+            </svg>
+            <h1 className="font-display text-lg text-ink-50">
+              Admin <span className="text-gold-400">Dashboard</span>
+            </h1>
+          </div>
         </div>
-        <div className="flex gap-1">
-          {(['overview', 'users', 'firms'] as const).map(t => (
+        <div className="flex gap-1 bg-ink-900/50 rounded-lg p-0.5">
+          {(['overview', 'users', 'firms', 'branding'] as const).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-3 py-1.5 rounded-lg text-xs capitalize ${tab === t ? 'bg-ink-700 text-ink-100' : 'text-ink-400 hover:text-ink-200 hover:bg-ink-800/50'}`}
+              className={`px-3 py-1.5 rounded-md text-xs capitalize transition-all ${tab === t ? 'bg-ink-700 text-ink-100 shadow-sm' : 'text-ink-400 hover:text-ink-200'}`}
             >
               {t}
             </button>
@@ -125,13 +132,18 @@ export default function AdminDashboard() {
             {/* Stat Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {[
-                { label: 'Total Users', value: stats?.totalUsers ?? '-', color: 'text-gold-400' },
-                { label: 'Active (30d)', value: stats?.activeUsers ?? '-', color: 'text-green-400' },
-                { label: 'Total Dictations', value: stats?.totalDictations ?? '-', color: 'text-gold-400' },
-                { label: 'This Month', value: stats?.monthDictations ?? '-', color: 'text-blue-400' },
+                { label: 'Total Users', value: stats?.totalUsers ?? '-', color: 'text-gold-400', icon: 'M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z' },
+                { label: 'Active (30d)', value: stats?.activeUsers ?? '-', color: 'text-emerald-400', icon: 'M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+                { label: 'Total Dictations', value: stats?.totalDictations ?? '-', color: 'text-gold-400', icon: 'M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z' },
+                { label: 'This Month', value: stats?.monthDictations ?? '-', color: 'text-sky-400', icon: 'M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z' },
               ].map(s => (
-                <div key={s.label} className="bg-ink-900/50 border border-ink-800/50 rounded-xl p-4">
-                  <p className="text-xs text-ink-500 mb-1">{s.label}</p>
+                <div key={s.label} className="bg-ink-900/50 border border-ink-800/50 rounded-xl p-4 hover:border-ink-700/50 transition-colors">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className={`w-4 h-4 ${s.color} opacity-60`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d={s.icon} />
+                    </svg>
+                    <p className="text-xs text-ink-500">{s.label}</p>
+                  </div>
                   <p className={`text-2xl font-display ${s.color}`}>{s.value}</p>
                 </div>
               ))}
@@ -307,11 +319,296 @@ export default function AdminDashboard() {
         )}
 
         {/* Firms Tab */}
-        {tab === 'firms' && (
-          <div className="max-w-3xl">
-            <p className="text-ink-400 text-sm">Firm management — configure firm profiles, vocabulary, and white-label branding from Settings.</p>
+        {tab === 'firms' && <FirmsManager />}
+
+        {/* Branding Tab */}
+        {tab === 'branding' && <BrandingManager />}
+      </div>
+    </div>
+  );
+}
+
+// === Firms Manager Component ===
+interface FirmData {
+  id: string;
+  name: string;
+  slug: string;
+  dateFormat: string;
+  spellingPreference: string;
+  defaultInstructions: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const EMPTY_FORM = { name: '', slug: '', dateFormat: 'DD/MM/YYYY', spellingPreference: 'US', defaultInstructions: '' };
+
+function FirmsManager() {
+  const [firms, setFirms] = useState<FirmData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [msg, setMsg] = useState('');
+  const [msgType, setMsgType] = useState<'success' | 'error'>('success');
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+
+  const flash = (text: string, type: 'success' | 'error') => {
+    setMsg(text);
+    setMsgType(type);
+    setTimeout(() => setMsg(''), 3000);
+  };
+
+  const fetchFirms = async () => {
+    try {
+      const res = await fetch('/api/firms');
+      const data = await res.json();
+      setFirms(data.firms || []);
+    } catch {
+      flash('Failed to load firms', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchFirms(); }, []);
+
+  const saveFirm = async () => {
+    if (!form.name.trim()) { flash('Firm name is required', 'error'); return; }
+    try {
+      const isEdit = !!editingId;
+      const res = await fetch('/api/firms', {
+        method: isEdit ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(isEdit ? { id: editingId, ...form } : form),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || data.errors?.join(', ') || 'Failed');
+      }
+      flash(isEdit ? 'Firm updated' : 'Firm created', 'success');
+      setShowForm(false);
+      setEditingId(null);
+      setForm(EMPTY_FORM);
+      fetchFirms();
+    } catch (err: any) {
+      flash(err.message, 'error');
+    }
+  };
+
+  const deleteFirm = async (id: string, name: string) => {
+    try {
+      const res = await fetch(`/api/firms/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Delete failed');
+      flash(`Deleted ${name}`, 'success');
+      fetchFirms();
+    } catch (err: any) {
+      flash(err.message, 'error');
+    }
+  };
+
+  const openEdit = (firm: FirmData) => {
+    setEditingId(firm.id);
+    setForm({
+      name: firm.name,
+      slug: firm.slug,
+      dateFormat: firm.dateFormat || 'DD/MM/YYYY',
+      spellingPreference: firm.spellingPreference || 'US',
+      defaultInstructions: firm.defaultInstructions || '',
+    });
+    setShowForm(true);
+  };
+
+  return (
+    <div className="max-w-3xl">
+      {msg && (
+        <div className={`mb-4 px-4 py-2 rounded-lg text-sm ${msgType === 'success' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-red-500/10 text-red-300'}`}>
+          {msg}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-medium text-ink-200">Firm Profiles</h3>
+        <button
+          onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(EMPTY_FORM); }}
+          className="px-3 py-1.5 bg-gold-500 text-ink-950 rounded-lg text-xs font-medium hover:bg-gold-400"
+        >
+          {showForm ? 'Cancel' : '+ Create Firm'}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="bg-ink-800/50 rounded-xl p-4 mb-4 space-y-3">
+          <div>
+            <label className="text-xs text-ink-400 block mb-1">Firm name *</label>
+            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              className="w-full bg-ink-800 border border-ink-700/50 rounded-lg px-3 py-1.5 text-sm text-ink-100 focus:border-gold-500/50 focus:outline-none" />
           </div>
-        )}
+          <div>
+            <label className="text-xs text-ink-400 block mb-1">Slug</label>
+            <input value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} disabled={!!editingId}
+              placeholder="auto-generated if empty"
+              className="w-full bg-ink-800 border border-ink-700/50 rounded-lg px-3 py-1.5 text-sm text-ink-100 placeholder:text-ink-600 focus:border-gold-500/50 focus:outline-none disabled:opacity-50" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-ink-400 block mb-1">Date format</label>
+              <select value={form.dateFormat} onChange={e => setForm(f => ({ ...f, dateFormat: e.target.value }))}
+                className="w-full bg-ink-800 border border-ink-700/50 rounded-lg px-3 py-1.5 text-sm text-ink-100 focus:border-gold-500/50 focus:outline-none">
+                {['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD', 'D MMMM YYYY', 'MMMM D, YYYY', 'DD.MM.YYYY', 'D/M/YYYY'].map(f => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-ink-400 block mb-1">Spelling</label>
+              <select value={form.spellingPreference} onChange={e => setForm(f => ({ ...f, spellingPreference: e.target.value }))}
+                className="w-full bg-ink-800 border border-ink-700/50 rounded-lg px-3 py-1.5 text-sm text-ink-100 focus:border-gold-500/50 focus:outline-none">
+                {['US', 'UK', 'AU'].map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-ink-400 block mb-1">Default AI instructions</label>
+            <textarea value={form.defaultInstructions} onChange={e => setForm(f => ({ ...f, defaultInstructions: e.target.value }))}
+              rows={3} placeholder="e.g. Always use UK spelling. Our firm name is..."
+              className="w-full bg-ink-800 border border-ink-700/50 rounded-lg px-3 py-2 text-sm text-ink-100 placeholder:text-ink-600 resize-none focus:border-gold-500/50 focus:outline-none" />
+          </div>
+          <button onClick={saveFirm} className="w-full py-2 rounded-lg text-sm font-medium bg-gold-500 text-ink-950 hover:bg-gold-400">
+            {editingId ? 'Update Firm' : 'Create Firm'}
+          </button>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2].map(i => <div key={i} className="h-14 bg-ink-800/50 rounded-lg animate-pulse" />)}
+        </div>
+      ) : firms.length === 0 ? (
+        <p className="text-xs text-ink-600 italic">No firms configured yet</p>
+      ) : (
+        <div className="space-y-2">
+          {firms.map(firm => (
+            <div key={firm.id} className="bg-ink-800/50 rounded-lg px-4 py-3 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-ink-200 font-medium">{firm.name}</p>
+                <p className="text-[11px] text-ink-500 mt-0.5">
+                  {firm.slug && <span className="mr-2">{firm.slug}</span>}
+                  <span className="bg-ink-700/50 px-1.5 py-0.5 rounded text-[10px]">{firm.spellingPreference || 'US'}</span>
+                  <span className="ml-1.5">{firm.dateFormat || 'DD/MM/YYYY'}</span>
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => openEdit(firm)} className="text-xs text-ink-400 hover:text-gold-400">Edit</button>
+                <button onClick={() => deleteFirm(firm.id, firm.name)} className="text-xs text-ink-400 hover:text-red-400">Delete</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// === Branding Manager Component ===
+function BrandingManager() {
+  const { branding, refresh } = useBranding();
+  const [appName, setAppName] = useState(branding.appName);
+  const [logoUrl, setLogoUrl] = useState(branding.logoUrl || '');
+  const [accentColor, setAccentColor] = useState(branding.accentColor);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    setAppName(branding.appName);
+    setLogoUrl(branding.logoUrl || '');
+    setAccentColor(branding.accentColor);
+  }, [branding]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/whitelabel', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: { appName, logoUrl: logoUrl || undefined, accentColor, primaryColor: branding.primaryColor } }),
+      });
+      if (!res.ok) throw new Error('Save failed');
+      await refresh();
+      setMsg('Branding saved');
+      setTimeout(() => setMsg(''), 3000);
+    } catch {
+      setMsg('Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="max-w-xl">
+      {msg && (
+        <div className={`mb-4 px-4 py-2 rounded-lg text-sm ${msg.includes('Failed') ? 'bg-red-500/10 text-red-300' : 'bg-emerald-500/10 text-emerald-300'}`}>
+          {msg}
+        </div>
+      )}
+
+      <div className="space-y-4">
+        <div>
+          <label className="text-xs text-ink-400 block mb-1">App title</label>
+          <input value={appName} onChange={e => setAppName(e.target.value)}
+            className="w-full bg-ink-800 border border-ink-700/50 rounded-lg px-3 py-2 text-sm text-ink-100 focus:border-gold-500/50 focus:outline-none" />
+        </div>
+
+        <div>
+          <label className="text-xs text-ink-400 block mb-1">Logo URL (optional)</label>
+          <input value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="https://..."
+            className="w-full bg-ink-800 border border-ink-700/50 rounded-lg px-3 py-2 text-sm text-ink-100 placeholder:text-ink-600 focus:border-gold-500/50 focus:outline-none" />
+          {logoUrl && (
+            <div className="mt-2 p-3 bg-ink-800/50 rounded-lg">
+              <img src={logoUrl} alt="Logo preview" className="h-8 object-contain" onError={e => (e.currentTarget.style.display = 'none')} />
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label className="text-xs text-ink-400 block mb-1">Accent colour</label>
+          <div className="flex items-center gap-3">
+            <input type="color" value={accentColor} onChange={e => setAccentColor(e.target.value)}
+              className="w-10 h-10 rounded-lg border border-ink-700/50 cursor-pointer bg-transparent" />
+            <input value={accentColor} onChange={e => setAccentColor(e.target.value)}
+              className="flex-1 bg-ink-800 border border-ink-700/50 rounded-lg px-3 py-2 text-sm text-ink-100 font-mono focus:border-gold-500/50 focus:outline-none" />
+          </div>
+        </div>
+
+        {/* Live preview */}
+        <div>
+          <label className="text-xs text-ink-400 block mb-2">Preview</label>
+          <div className="bg-ink-900 border border-ink-800/50 rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              {logoUrl ? (
+                <img src={logoUrl} alt="" className="h-6" onError={e => (e.currentTarget.style.display = 'none')} />
+              ) : (
+                <span className="font-display text-sm text-ink-50">
+                  {appName.includes(' ') ? (
+                    <>{appName.split(' ').slice(0, -1).join(' ')} <span style={{ color: accentColor }}>{appName.split(' ').pop()}</span></>
+                  ) : (
+                    <span style={{ color: accentColor }}>{appName}</span>
+                  )}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl" style={{ backgroundColor: accentColor }} />
+              <button className="px-3 py-1.5 rounded-lg text-xs font-medium text-ink-950" style={{ backgroundColor: accentColor }}>
+                Enhance
+              </button>
+              <span className="text-xs" style={{ color: accentColor }}>Accent text</span>
+            </div>
+          </div>
+        </div>
+
+        <button onClick={save} disabled={saving}
+          className="w-full py-2.5 rounded-lg text-sm font-medium bg-gold-500 text-ink-950 hover:bg-gold-400 disabled:opacity-50">
+          {saving ? 'Saving...' : 'Save Branding'}
+        </button>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, isDatabaseConfigured } from '@/lib/db';
 import { getUserFromRequest, requireRole } from '@/lib/auth-multi';
+import { rateLimiters } from '@/lib/rate-limit';
 
 /**
  * GET /api/admin/users — Paginated user list with search and filters (admin/owner only)
@@ -13,6 +14,9 @@ import { getUserFromRequest, requireRole } from '@/lib/auth-multi';
  *   ?limit=   — items per page (default 25, max 100)
  */
 export async function GET(request: NextRequest) {
+  const limited = rateLimiters.admin(request);
+  if (limited) return limited;
+
   const currentUser = await getUserFromRequest(request);
   if (!currentUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -20,6 +24,14 @@ export async function GET(request: NextRequest) {
 
   if (!requireRole(currentUser, 'admin', 'owner')) {
     return NextResponse.json({ error: 'Forbidden: admin or owner role required' }, { status: 403 });
+  }
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json({
+      users: [],
+      pagination: { page: 1, limit: 25, total: 0, totalPages: 0 },
+      notice: 'Database not configured. User management is unavailable.',
+    });
   }
 
   try {
@@ -89,6 +101,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: unknown) {
     console.error('Admin users error:', error);
-    return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch users', code: 'ADMIN_USERS_ERROR' }, { status: 500 });
   }
 }

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, isDatabaseConfigured } from '@/lib/db';
 import { handleCallback } from '@/lib/sso';
 import { createUserSession, User } from '@/lib/auth-multi';
+import { rateLimiters } from '@/lib/rate-limit';
 
 /**
  * GET /api/auth/sso/[provider]/callback — Handle OAuth callback
@@ -10,12 +11,19 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { provider: string } }
 ) {
+  const limited = rateLimiters.auth(request);
+  if (limited) return limited;
+
   const { provider } = params;
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
   const error = searchParams.get('error');
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://alecrae.app';
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.redirect(`${baseUrl}/?error=sso_unavailable`);
+  }
 
   if (error) {
     return NextResponse.redirect(`${baseUrl}/?error=sso_denied`);

@@ -1,12 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { query } from '@/lib/db';
+import { query, isDatabaseConfigured } from '@/lib/db';
 import { getOrCreateUser } from '@/lib/get-user';
+import { rateLimiters } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
+  const limited = rateLimiters.general(request);
+  if (limited) return limited;
+
   const authenticated = await getSession();
   if (!authenticated) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json(
+      { error: 'Database not configured. Analytics events are not being recorded.' },
+      { status: 503 }
+    );
   }
 
   try {
@@ -24,14 +35,29 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true }, { status: 201 });
   } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to log event', details: error.message }, { status: 500 });
+    console.error('Analytics log error:', error);
+    return NextResponse.json({ error: 'Failed to log event', code: 'ANALYTICS_LOG_ERROR' }, { status: 500 });
   }
 }
 
 export async function GET(request: NextRequest) {
+  const rateLimited = rateLimiters.admin(request);
+  if (rateLimited) return rateLimited;
+
   const authenticated = await getSession();
   if (!authenticated) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json({
+      period_days: 30,
+      total_dictations: 0,
+      total_words: 0,
+      dictations_by_mode: [],
+      actions: [],
+      notice: 'Database not configured. Analytics data is unavailable.',
+    });
   }
 
   try {
@@ -79,6 +105,7 @@ export async function GET(request: NextRequest) {
       actions: recentActions,
     });
   } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to fetch analytics', details: error.message }, { status: 500 });
+    console.error('Fetch analytics error:', error);
+    return NextResponse.json({ error: 'Failed to fetch analytics', code: 'FETCH_ANALYTICS_ERROR' }, { status: 500 });
   }
 }

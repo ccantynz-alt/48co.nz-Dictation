@@ -1,12 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, isDatabaseConfigured } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth-multi';
 import { createCheckoutSession, PLANS } from '@/lib/stripe';
+import { rateLimiters } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
+  const limited = rateLimiters.billing(request);
+  if (limited) return limited;
+
   const currentUser = await getUserFromRequest(request);
   if (!currentUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json(
+      { error: 'Database not configured. Billing is unavailable.' },
+      { status: 503 }
+    );
   }
 
   try {
@@ -41,6 +52,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ url: checkoutUrl });
   } catch (error: unknown) {
     console.error('Checkout error:', error);
-    return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to create checkout session', code: 'CHECKOUT_ERROR' }, { status: 500 });
   }
 }

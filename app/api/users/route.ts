@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, isDatabaseConfigured } from '@/lib/db';
 import { getUserFromRequest, requireRole, hashPassword } from '@/lib/auth-multi';
+import { rateLimiters } from '@/lib/rate-limit';
 
 /**
  * GET /api/users — List users (admin/owner only)
  */
 export async function GET(request: NextRequest) {
+  const limited = rateLimiters.admin(request);
+  if (limited) return limited;
+
   const currentUser = await getUserFromRequest(request);
   if (!currentUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -15,28 +19,43 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Forbidden: admin or owner role required' }, { status: 403 });
   }
 
-  // If user has a firm, only list users in the same firm
-  let rows;
-  if (currentUser.firmId) {
-    rows = await query(
-      `SELECT id, email, name, role, firm_id, firm_name, subscription_tier, created_at, updated_at
-       FROM users WHERE firm_id = $1 ORDER BY created_at DESC`,
-      [currentUser.firmId]
-    );
-  } else {
-    rows = await query(
-      `SELECT id, email, name, role, firm_id, firm_name, subscription_tier, created_at, updated_at
-       FROM users ORDER BY created_at DESC`
-    );
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json({
+      users: [],
+      notice: 'Database not configured. User management is unavailable.',
+    });
   }
 
-  return NextResponse.json({ users: rows });
+  try {
+    // If user has a firm, only list users in the same firm
+    let rows;
+    if (currentUser.firmId) {
+      rows = await query(
+        `SELECT id, email, name, role, firm_id, firm_name, subscription_tier, created_at, updated_at
+         FROM users WHERE firm_id = $1 ORDER BY created_at DESC`,
+        [currentUser.firmId]
+      );
+    } else {
+      rows = await query(
+        `SELECT id, email, name, role, firm_id, firm_name, subscription_tier, created_at, updated_at
+         FROM users ORDER BY created_at DESC`
+      );
+    }
+
+    return NextResponse.json({ users: rows });
+  } catch (error: unknown) {
+    console.error('List users error:', error);
+    return NextResponse.json({ error: 'Failed to list users', code: 'LIST_USERS_ERROR' }, { status: 500 });
+  }
 }
 
 /**
  * POST /api/users — Invite a new user (admin/owner only)
  */
 export async function POST(request: NextRequest) {
+  const rateLimited = rateLimiters.admin(request);
+  if (rateLimited) return rateLimited;
+
   const currentUser = await getUserFromRequest(request);
   if (!currentUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -44,6 +63,13 @@ export async function POST(request: NextRequest) {
 
   if (!requireRole(currentUser, 'admin', 'owner')) {
     return NextResponse.json({ error: 'Forbidden: admin or owner role required' }, { status: 403 });
+  }
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json(
+      { error: 'Database not configured. User invitations are unavailable.' },
+      { status: 503 }
+    );
   }
 
   try {
@@ -99,6 +125,6 @@ export async function POST(request: NextRequest) {
     );
   } catch (error: unknown) {
     console.error('Invite user error:', error);
-    return NextResponse.json({ error: 'Failed to invite user' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to invite user', code: 'INVITE_USER_ERROR' }, { status: 500 });
   }
 }

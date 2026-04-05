@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession } from '@/lib/auth';
+import { rateLimiters } from '@/lib/rate-limit';
 
 /**
  * Audio storage API route.
@@ -9,16 +10,7 @@ import { verifySession } from '@/lib/auth';
  * audio files for playback and re-transcription.
  */
 
-interface AudioReference {
-  id: string;
-  filename: string;
-  mimeType: string;
-  size: number;
-  createdAt: string;
-}
-
-// In-memory store — will be replaced with cloud storage
-const audioStore = new Map<string, { reference: AudioReference; blob: Blob }>();
+import { audioStore, type AudioReference } from '@/lib/audio-store';
 
 async function checkAuth(request: NextRequest): Promise<NextResponse | null> {
   const session = request.cookies.get('alecrae_session')?.value;
@@ -32,6 +24,9 @@ async function checkAuth(request: NextRequest): Promise<NextResponse | null> {
  * POST /api/audio — Accept an audio blob and return a reference
  */
 export async function POST(request: NextRequest) {
+  const limited = rateLimiters.general(request);
+  if (limited) return limited;
+
   const authError = await checkAuth(request);
   if (authError) return authError;
 
@@ -91,7 +86,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Audio storage error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to store audio' },
+      { error: 'Failed to store audio', code: 'AUDIO_STORE_ERROR' },
       { status: 500 }
     );
   }
@@ -101,6 +96,9 @@ export async function POST(request: NextRequest) {
  * GET /api/audio?id=xxx — Retrieve an audio reference (or the audio itself)
  */
 export async function GET(request: NextRequest) {
+  const rateLimited = rateLimiters.general(request);
+  if (rateLimited) return rateLimited;
+
   const authError = await checkAuth(request);
   if (authError) return authError;
 

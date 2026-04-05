@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthorizationUrl } from '@/lib/sso';
+import { rateLimiters } from '@/lib/rate-limit';
 
 /**
  * GET /api/auth/sso/[provider] — Redirect to SSO provider authorization URL
@@ -8,6 +9,9 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { provider: string } }
 ) {
+  const limited = rateLimiters.auth(request);
+  if (limited) return limited;
+
   const { provider } = params;
 
   if (provider !== 'google' && provider !== 'microsoft') {
@@ -23,7 +27,7 @@ export async function GET(
   } catch (error: unknown) {
     console.error('SSO redirect error:', error);
     return NextResponse.json(
-      { error: 'SSO not configured for this provider' },
+      { error: 'SSO not configured for this provider', code: 'SSO_CONFIG_ERROR' },
       { status: 500 }
     );
   }
