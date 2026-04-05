@@ -30,6 +30,12 @@ export default function LoginPage() {
   // Admin state
   const [adminPassword, setAdminPassword] = useState('');
 
+  // PWA install state
+  const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+
   // Reset error when switching views
   useEffect(() => {
     setError('');
@@ -49,6 +55,63 @@ export default function LoginPage() {
 
   const strengthLabel = ['', 'Weak', 'Fair', 'Good', 'Strong', 'Excellent'][strength];
   const strengthColor = ['', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500', 'bg-emerald-400'][strength];
+
+  // PWA install detection
+  useEffect(() => {
+    // Check if already running as installed PWA
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+      || (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+    setIsStandalone(standalone);
+    if (standalone) return;
+
+    // Detect iOS (Safari doesn't fire beforeinstallprompt)
+    const ua = window.navigator.userAgent;
+    const isiOS = /iPad|iPhone|iPod/.test(ua) || (ua.includes('Mac') && 'ontouchend' in document);
+    setIsIOS(isiOS);
+
+    if (isiOS) {
+      // On iOS Safari, show the manual instructions banner
+      const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|OPiOS|EdgiOS/.test(ua);
+      if (isSafari) {
+        setShowInstallBanner(true);
+      }
+      return;
+    }
+
+    // For Chrome/Edge/Samsung/etc — capture the beforeinstallprompt
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+      setShowInstallBanner(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handler);
+
+    // Listen for successful install
+    window.addEventListener('appinstalled', () => {
+      setShowInstallBanner(false);
+      setInstallPrompt(null);
+    });
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!installPrompt) return;
+    const prompt = installPrompt as Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
+    await prompt.prompt();
+    const result = await prompt.userChoice;
+    if (result.outcome === 'accepted') {
+      setShowInstallBanner(false);
+      setInstallPrompt(null);
+    }
+  };
+
+  const dismissInstallBanner = () => {
+    setShowInstallBanner(false);
+  };
 
   // ─── Handlers ────────────────────────────────────────────
 
@@ -612,6 +675,67 @@ export default function LoginPage() {
           </a>
         </div>
       </div>
+
+      {/* PWA Install Banner */}
+      {showInstallBanner && !isStandalone && (
+        <div className="fixed bottom-0 inset-x-0 z-50 animate-fade-in">
+          <div className="max-w-lg mx-auto px-4 pb-4">
+            <div className="bg-ink-900/95 border border-gold-500/30 rounded-2xl p-4 shadow-2xl shadow-black/40 backdrop-blur-md">
+              <div className="flex items-start gap-3">
+                {/* Icon */}
+                <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-gold-600/10 border border-gold-500/20 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-gold-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                  </svg>
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-ink-100 text-sm font-medium">
+                    Install AlecRae Voice
+                  </p>
+
+                  {isIOS ? (
+                    <p className="text-ink-400 text-xs mt-1 leading-relaxed">
+                      Tap the{' '}
+                      <svg className="inline w-3.5 h-3.5 text-ink-300 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                      </svg>{' '}
+                      Share button, then scroll down and tap{' '}
+                      <span className="text-ink-200 font-medium">Add to Home Screen</span>
+                    </p>
+                  ) : (
+                    <p className="text-ink-400 text-xs mt-1">
+                      Add to your device for instant access and a native app experience.
+                    </p>
+                  )}
+                </div>
+
+                {/* Dismiss */}
+                <button
+                  onClick={dismissInstallBanner}
+                  className="flex-shrink-0 text-ink-600 hover:text-ink-400 transition-colors p-1"
+                  aria-label="Dismiss"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Install button (non-iOS only) */}
+              {!isIOS && installPrompt && (
+                <button
+                  onClick={handleInstallClick}
+                  className="mt-3 w-full bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 text-ink-950 font-semibold py-2.5 rounded-xl transition-all text-sm tracking-wide"
+                >
+                  Install App
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

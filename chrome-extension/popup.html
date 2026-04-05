@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=300" />
+  <title>AlecRae Voice</title>
+  <style>
+    /* ------------------------------------------------------------------ */
+    /* Base                                                                */
+    /* ------------------------------------------------------------------ */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: 300px;
+      min-height: 400px;
+      max-height: 520px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0f;
+      color: #e2e2e8;
+      overflow-y: auto;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Header                                                              */
+    /* ------------------------------------------------------------------ */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid rgba(196, 162, 58, 0.15);
+      background: linear-gradient(180deg, rgba(196, 162, 58, 0.06) 0%, transparent 100%);
+    }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .header-brand svg { flex-shrink: 0; }
+
+    .header-brand h1 {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 15px;
+      font-weight: 600;
+      color: #c4a23a;
+      letter-spacing: 0.3px;
+    }
+
+    .header-brand span {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 10px;
+      color: #888;
+      margin-left: -4px;
+    }
+
+    .logout-btn {
+      background: none;
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #888;
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .logout-btn:hover { color: #e2e2e8; border-color: rgba(255,255,255,0.25); }
+
+    /* ------------------------------------------------------------------ */
+    /* Sections                                                            */
+    /* ------------------------------------------------------------------ */
+    .section { padding: 12px 16px; }
+    .section + .section { border-top: 1px solid rgba(255,255,255,0.06); }
+
+    .section-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Login form                                                          */
+    /* ------------------------------------------------------------------ */
+    .login-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 24px;
+      min-height: 400px;
+    }
+
+    .login-container svg { margin-bottom: 16px; }
+
+    .login-container h2 {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 18px;
+      color: #c4a23a;
+      margin-bottom: 4px;
+    }
+
+    .login-container p {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 24px;
+    }
+
+    .login-container input {
+      width: 100%;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 6px;
+      color: #e2e2e8;
+      font-size: 13px;
+      outline: none;
+      transition: border 0.15s;
+      margin-bottom: 12px;
+    }
+    .login-container input:focus { border-color: #c4a23a; }
+    .login-container input::placeholder { color: #555; }
+
+    .login-btn {
+      width: 100%;
+      padding: 10px;
+      background: linear-gradient(135deg, #c4a23a, #a8892e);
+      border: none;
+      border-radius: 6px;
+      color: #0a0a0f;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .login-btn:hover { opacity: 0.9; }
+    .login-btn:disabled { opacity: 0.5; cursor: default; }
+
+    .login-error {
+      font-size: 12px;
+      color: #ef4444;
+      margin-top: 8px;
+      display: none;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Record button                                                       */
+    /* ------------------------------------------------------------------ */
+    .record-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+    }
+
+    .record-btn {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      border: 2px solid #c4a23a;
+      background: rgba(196, 162, 58, 0.1);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .record-btn:hover { background: rgba(196, 162, 58, 0.2); }
+
+    .record-btn.recording {
+      border-color: #ef4444;
+      background: rgba(239, 68, 68, 0.15);
+      animation: rec-pulse 1.5s infinite;
+    }
+
+    @keyframes rec-pulse {
+      0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+      70% { box-shadow: 0 0 0 16px rgba(239, 68, 68, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+
+    .record-btn svg { pointer-events: none; }
+
+    .record-hint {
+      font-size: 11px;
+      color: #555;
+      margin-top: 8px;
+    }
+
+    .record-status {
+      font-size: 12px;
+      color: #c4a23a;
+      margin-top: 6px;
+      display: none;
+    }
+    .record-status.visible { display: block; }
+
+    /* ------------------------------------------------------------------ */
+    /* Mode selector                                                       */
+    /* ------------------------------------------------------------------ */
+    select {
+      width: 100%;
+      padding: 8px 10px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 6px;
+      color: #e2e2e8;
+      font-size: 12px;
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23888' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+    }
+    select:focus { border-color: #c4a23a; }
+
+    /* ------------------------------------------------------------------ */
+    /* Toggles                                                             */
+    /* ------------------------------------------------------------------ */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 0;
+    }
+
+    .toggle-label {
+      font-size: 12px;
+      color: #bbb;
+    }
+
+    .toggle {
+      width: 36px;
+      height: 20px;
+      background: rgba(255,255,255,0.1);
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      position: relative;
+      transition: background 0.2s;
+    }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #666;
+      transition: all 0.2s;
+    }
+    .toggle.on { background: rgba(196, 162, 58, 0.3); }
+    .toggle.on::after { left: 18px; background: #c4a23a; }
+
+    /* ------------------------------------------------------------------ */
+    /* History                                                             */
+    /* ------------------------------------------------------------------ */
+    .history-list { display: flex; flex-direction: column; gap: 6px; }
+
+    .history-item {
+      padding: 8px 10px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .history-item:hover { background: rgba(255,255,255,0.06); }
+
+    .history-text {
+      font-size: 12px;
+      color: #ccc;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 260px;
+    }
+
+    .history-meta {
+      font-size: 10px;
+      color: #555;
+      margin-top: 2px;
+    }
+
+    .history-empty {
+      font-size: 12px;
+      color: #444;
+      text-align: center;
+      padding: 12px 0;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Footer                                                              */
+    /* ------------------------------------------------------------------ */
+    .footer {
+      padding: 10px 16px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      text-align: center;
+    }
+
+    .footer a {
+      font-size: 12px;
+      color: #c4a23a;
+      text-decoration: none;
+      transition: opacity 0.15s;
+    }
+    .footer a:hover { opacity: 0.8; }
+
+    /* ------------------------------------------------------------------ */
+    /* Utility                                                             */
+    /* ------------------------------------------------------------------ */
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================== -->
+  <!-- LOGIN VIEW                                                      -->
+  <!-- ============================================================== -->
+  <div id="login-view" class="login-container">
+    <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+      <rect width="36" height="36" rx="8" fill="#c4a23a" fill-opacity="0.12"/>
+      <path d="M18 8a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0v-6a4 4 0 0 1 4-4z" stroke="#c4a23a" stroke-width="1.8" fill="none"/>
+      <path d="M12 17v1a6 6 0 0 0 12 0v-1" stroke="#c4a23a" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="18" y1="24" x2="18" y2="28" stroke="#c4a23a" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>
+    <h2>AlecRae Voice</h2>
+    <p>Professional dictation for legal &amp; accounting</p>
+    <input type="password" id="password-input" placeholder="Enter password" autocomplete="off" />
+    <button class="login-btn" id="login-btn">Sign in</button>
+    <div class="login-error" id="login-error">Invalid password. Please try again.</div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- MAIN VIEW                                                       -->
+  <!-- ============================================================== -->
+  <div id="main-view" class="hidden">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-brand">
+        <svg width="20" height="20" viewBox="0 0 36 36" fill="none">
+          <rect width="36" height="36" rx="8" fill="#c4a23a" fill-opacity="0.12"/>
+          <path d="M18 8a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0v-6a4 4 0 0 1 4-4z" stroke="#c4a23a" stroke-width="2" fill="none"/>
+          <path d="M12 17v1a6 6 0 0 0 12 0v-1" stroke="#c4a23a" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <div>
+          <h1>AlecRae Voice</h1>
+        </div>
+      </div>
+      <button class="logout-btn" id="logout-btn">Sign out</button>
+    </div>
+
+    <!-- Record -->
+    <div class="record-section">
+      <button class="record-btn" id="record-btn">
+        <svg id="mic-icon" width="28" height="28" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" fill="#c4a23a"/>
+          <path d="M8 11v1a4 4 0 0 0 8 0v-1" stroke="#c4a23a" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="12" y1="16" x2="12" y2="19" stroke="#c4a23a" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <svg id="stop-icon" class="hidden" width="22" height="22" viewBox="0 0 24 24" fill="none">
+          <rect x="6" y="6" width="12" height="12" rx="2" fill="#ef4444"/>
+        </svg>
+      </button>
+      <div class="record-hint">Tap to dictate &middot; Alt+Shift+D</div>
+      <div class="record-status" id="record-status">Recording...</div>
+    </div>
+
+    <!-- Mode -->
+    <div class="section">
+      <div class="section-label">Document mode</div>
+      <select id="mode-select">
+        <optgroup label="General">
+          <option value="general">General cleanup</option>
+          <option value="client-email">Client email</option>
+          <option value="meeting-notes">Meeting notes</option>
+        </optgroup>
+        <optgroup label="Legal">
+          <option value="legal-letter">Legal letter</option>
+          <option value="legal-memo">Legal memorandum</option>
+          <option value="court-filing">Court filing</option>
+          <option value="demand-letter">Demand letter</option>
+          <option value="deposition-summary">Deposition summary</option>
+          <option value="engagement-letter">Engagement letter</option>
+        </optgroup>
+        <optgroup label="Accounting">
+          <option value="accounting-report">Accounting report</option>
+          <option value="tax-advisory">Tax advisory</option>
+          <option value="audit-opinion">Audit opinion</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <!-- Toggles -->
+    <div class="section">
+      <div class="toggle-row">
+        <span class="toggle-label">Insert into page</span>
+        <button class="toggle on" id="toggle-insert" role="switch" aria-checked="true"></button>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">AI enhance</span>
+        <button class="toggle" id="toggle-enhance" role="switch" aria-checked="false"></button>
+      </div>
+    </div>
+
+    <!-- History -->
+    <div class="section">
+      <div class="section-label">Recent dictations</div>
+      <div class="history-list" id="history-list">
+        <div class="history-empty">No dictations yet</div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <a href="https://alecrae.app/app" target="_blank" rel="noopener">Open full app &rarr;</a>
+    </div>
+
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -10,7 +10,12 @@
     "cap:init": "npx cap init",
     "cap:add:ios": "npx cap add ios",
     "cap:add:android": "npx cap add android",
-    "cap:sync": "npx cap sync"
+    "cap:sync": "npx cap sync",
+    "cap:ios": "npx cap open ios",
+    "cap:android": "npx cap open android",
+    "build:mobile": "next build && next export && npx cap sync",
+    "electron:dev": "cd electron && npx electron .",
+    "electron:build": "cd electron && npx electron-builder"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
