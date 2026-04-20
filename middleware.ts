@@ -5,7 +5,29 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Public routes — no auth needed
-  if (pathname === '/' || pathname === '/privacy' || pathname.startsWith('/reset-password') || pathname.startsWith('/api/auth') || pathname.startsWith('/_next') || pathname.startsWith('/manifest') || pathname.endsWith('.png') || pathname.endsWith('.ico')) {
+  const publicPages = new Set([
+    '/',
+    '/login',
+    '/privacy',
+    '/terms',
+    '/pricing',
+    '/about',
+    '/contact',
+  ]);
+
+  if (
+    publicPages.has(pathname) ||
+    pathname.startsWith('/reset-password') ||
+    pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/manifest') ||
+    pathname.endsWith('.png') ||
+    pathname.endsWith('.ico') ||
+    pathname.endsWith('.svg') ||
+    pathname.endsWith('.webmanifest') ||
+    pathname === '/robots.txt' ||
+    pathname === '/sitemap.xml'
+  ) {
     return NextResponse.next();
   }
 
